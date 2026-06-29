@@ -13,13 +13,16 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # The plane reuses the verification-engine (sandbox/code verifier) and the
-# risk-engine (scoring model), plus the shared event contracts.
+# risk-engine (scoring model), plus the shared event contracts and the
+# fleet primitives (region-aware routing/coordination).
 COPY libs/touchstone-events /build/libs/touchstone-events
+COPY libs/touchstone-fleet /build/libs/touchstone-fleet
 COPY services/verification-engine /build/services/verification-engine
 COPY services/risk-engine /build/services/risk-engine
 COPY services/ivp/pyproject.toml /build/services/ivp/pyproject.toml
 COPY services/ivp/src /build/services/ivp/src
 RUN pip install /build/libs/touchstone-events \
+    && pip install /build/libs/touchstone-fleet \
     && pip install /build/services/verification-engine \
     && pip install /build/services/risk-engine \
     && pip install /build/services/ivp
