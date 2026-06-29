@@ -5,7 +5,14 @@ from __future__ import annotations
 import pytest
 
 from touchstone_verify.sandbox.pool import PoolExhausted, WarmSandboxPool
-from touchstone_verify.sandbox.runner import SandboxLimits
+from touchstone_verify.sandbox.runner import SandboxLimits, sandbox_supported
+
+# The warm pool spawns real sandboxed workers (POSIX fork/rlimits/unshare); skip
+# — never fail — on platforms that cannot run them (Windows). Exercised in CI.
+pytestmark = pytest.mark.skipif(
+    not sandbox_supported(),
+    reason="POSIX process sandbox (fork/rlimits/unshare) unavailable on this platform",
+)
 
 CODE = "def check(artifact):\n    return {'score': 1.0 if 'safe' in artifact else 0.0}"
 

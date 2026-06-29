@@ -31,8 +31,15 @@ from touchstone_verify.artifact_store import ArtifactStore
 from touchstone_verify.engine.registry import VerifierFactory
 from touchstone_verify.providers.mock import MockProvider
 from touchstone_verify.repository import Repository
-from touchstone_verify.sandbox.runner import SandboxLimits, SandboxRunner
+from touchstone_verify.sandbox.runner import SandboxLimits, SandboxRunner, sandbox_supported
 from touchstone_verify.worker import Worker
+
+# The worker grades verifier code in the real POSIX sandbox; skip — never fail —
+# where fork/rlimits are unavailable (Windows). Runs for real in CI on Linux.
+pytestmark = pytest.mark.skipif(
+    not sandbox_supported(),
+    reason="POSIX process sandbox (fork/rlimits/unshare) unavailable on this platform",
+)
 
 DB_URL = os.environ.get(
     "TOUCHSTONE_VERIFY_DATABASE_URL",

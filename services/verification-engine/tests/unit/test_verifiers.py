@@ -8,13 +8,18 @@ from touchstone_verify.engine.ensemble import EnsembleVerifier
 from touchstone_verify.engine.model_verifier import ModelVerifier
 from touchstone_verify.engine.process_verifier import ProcessVerifier
 from touchstone_verify.providers.mock import MockProvider
-from touchstone_verify.sandbox.runner import SandboxLimits, SandboxRunner
+from touchstone_verify.sandbox.runner import SandboxLimits, SandboxRunner, sandbox_supported
 
 CTX = VerifierContext(verification_id="v1", verifier_id="vf1")
 
 
 @pytest.fixture
 def sandbox():
+    # Code-verifier tests run real sandboxed subprocesses; the model/process/
+    # ensemble tests do not. Skip only the sandbox-backed ones where POSIX
+    # fork/rlimits are unavailable (Windows), preserving the rest of the suite.
+    if not sandbox_supported():
+        pytest.skip("POSIX process sandbox (fork/rlimits/unshare) unavailable on this platform")
     return SandboxRunner(SandboxLimits(cpu_seconds=2, wall_timeout_s=5))
 
 

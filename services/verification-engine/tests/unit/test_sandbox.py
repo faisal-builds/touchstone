@@ -3,7 +3,14 @@ guarantees actually hold (not just that the happy path works)."""
 
 import pytest
 
-from touchstone_verify.sandbox.runner import SandboxLimits, SandboxRunner
+from touchstone_verify.sandbox.runner import SandboxLimits, SandboxRunner, sandbox_supported
+
+# The process sandbox needs POSIX fork/rlimits/unshare; it runs (and is exercised
+# in CI) on Linux. Skip — never fail — where those primitives are absent (Windows).
+pytestmark = pytest.mark.skipif(
+    not sandbox_supported(),
+    reason="POSIX process sandbox (fork/rlimits/unshare) unavailable on this platform",
+)
 
 
 @pytest.mark.asyncio

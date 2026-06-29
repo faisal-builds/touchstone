@@ -55,14 +55,20 @@ def server():
 
     base = f"http://127.0.0.1:{port}"
     for _ in range(100):  # wait up to ~5s for readiness
+        # Poll /readyz, not /healthz: liveness returns 200 even when Postgres is
+        # down, which would let the suite run and then fail on the first DB call
+        # instead of skipping. Readiness reports the database check, so this skips
+        # cleanly when Postgres is unavailable (and runs for real in CI).
         try:
-            if httpx.get(f"{base}/healthz", timeout=0.5).status_code == 200:
+            r = httpx.get(f"{base}/readyz", timeout=0.5)
+            if r.status_code == 200 and r.json().get("status") == "ready":
                 break
         except Exception:
-            time.sleep(0.05)
+            pass
+        time.sleep(0.05)
     else:  # pragma: no cover
         srv.should_exit = True
-        pytest.skip("server did not become healthy (is Postgres up?)")
+        pytest.skip("control-plane did not become ready (is Postgres up?)")
 
     yield base
     srv.should_exit = True
