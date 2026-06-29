@@ -1,4 +1,4 @@
-# Local development stack for the Touchstone platform.
+﻿# Local development stack for the Touchstone platform.
 # Brings up the full dependency set (Postgres, Redis, Redpanda) plus the
 # control-plane service. `make up` is the one command an engineer runs after clone.
 name: touchstone
@@ -35,7 +35,11 @@ services:
       - --overprovisioned
       - --node-id 0
       - --kafka-addr PLAINTEXT://0.0.0.0:19092
-      - --advertise-kafka-addr PLAINTEXT://localhost:19092
+      # Advertise the compose service name so clients (which bootstrap via
+      # redpanda:19092) get redirected to an address they can reach on the
+      # docker network. "localhost" here resolves to each client's own
+      # container, causing Connection refused.
+      - --advertise-kafka-addr PLAINTEXT://redpanda:19092
     ports: ["19092:19092"]
     healthcheck:
       test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
@@ -58,12 +62,12 @@ services:
       TOUCHSTONE_REDPANDA_BROKERS: redpanda:19092
       TOUCHSTONE_JWT_SECRET: local-dev-secret-change-me-in-prod-please
     ports: ["8000:8000"]
-    # Run migrations then boot the API.
-    command: >
-      sh -c "alembic -c /app/alembic.ini upgrade head &&
-             gunicorn touchstone_control.main:app
-             --worker-class uvicorn.workers.UvicornWorker
-             --workers 4 --bind 0.0.0.0:8000 --access-logfile -"
+    # Run migrations then boot the API. Kept on a single line: a folded (>)
+    # scalar preserves newlines around the more-indented continuation lines,
+    # and sh treats those newlines as command separators, so the gunicorn flags
+    # would silently be dropped. --worker-tmp-dir /tmp avoids a Permission denied
+    # crash writing gunicorn's heartbeat file under /home/touchstone.
+    command: sh -c "alembic -c /app/alembic.ini upgrade head && gunicorn touchstone_control.main:app --worker-class uvicorn.workers.UvicornWorker --workers 4 --bind 0.0.0.0:8000 --worker-tmp-dir /tmp --access-logfile -"
 
   verification-engine:
     build:

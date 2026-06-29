@@ -13,7 +13,7 @@ dependencies = [
     "asyncpg>=0.30",
     "alembic>=1.14",
     "redis>=5.2",
-    "aiokafka>=0.12",
+    "aiokafka[lz4]>=0.12",  # lz4 extra: producer uses compression_type="lz4"
     "argon2-cffi>=23.1",
     "pyjwt>=2.10",
     "email-validator>=2.2",

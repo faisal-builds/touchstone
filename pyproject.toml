@@ -18,3 +18,8 @@ extend-exclude = [".venv", "**/migrations/versions"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "C4", "PT"]
 ignore = ["S101"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
