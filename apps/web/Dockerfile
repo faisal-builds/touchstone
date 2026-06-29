@@ -25,4 +25,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
 EXPOSE 3000
+
+# Liveness probe via the dashboard's /api/health route (node is the only runtime
+# in the image — no curl/wget).
+HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=5 \
+  CMD ["node", "-e", "require('http').get('http://127.0.0.1:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+
 CMD ["node", "server.js"]
