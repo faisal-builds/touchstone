@@ -1,0 +1,78 @@
+name: infra-validation
+
+# Validates the deploy layer that cannot be exercised by unit tests: the Helm
+# chart, raw Kubernetes manifests, and Terraform. Runs on any change under
+# deploy/ (and can be invoked manually).
+on:
+  pull_request:
+    paths:
+      - "deploy/**"
+      - ".github/workflows/infra-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+      - name: helm lint
+        run: helm lint deploy/helm/touchstone -f deploy/helm/touchstone/values-production.yaml
+      - name: helm template
+        run: |
+          helm template touchstone deploy/helm/touchstone \
+            -n touchstone -f deploy/helm/touchstone/values-production.yaml > /tmp/rendered.yaml
+          test -s /tmp/rendered.yaml
+      - name: Validate rendered manifests (kubeconform)
+        uses: docker://ghcr.io/yannh/kubeconform:latest
+        with:
+          args: >-
+            -strict -ignore-missing-schemas
+            -schema-location default
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+            /tmp/rendered.yaml
+
+  k8s-manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate raw manifests (kubeconform)
+        uses: docker://ghcr.io/yannh/kubeconform:latest
+        with:
+          args: "-strict -ignore-missing-schemas -summary deploy/k8s/"
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.5"
+      - name: terraform fmt
+        run: terraform fmt -check -recursive
+      - name: terraform init (no backend)
+        run: terraform init -backend=false
+      - name: terraform validate
+        run: terraform validate
+      - name: tflint
+        uses: terraform-linters/setup-tflint@v4
+      - run: tflint --recursive
+
+  policy-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkov (IaC security scan)
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: deploy
+          quiet: true
+          soft_fail: true

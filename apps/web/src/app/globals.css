@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+    font-feature-settings: "ss01", "cv05";
+  }
+  /* Data — scores, hashes, ids, timestamps — is always tabular monospace. */
+  .data {
+    @apply font-mono tabular-nums;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  ::selection {
+    background: rgba(181, 131, 43, 0.18);
+  }
+  *:focus-visible {
+    outline: none;
+    @apply shadow-focus rounded-md;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+}
+
+@layer components {
+  /* The assay streak — a bronze→gold hairline, the product's signature mark. */
+  .streak {
+    background-image: linear-gradient(90deg, theme("colors.assay.from"), theme("colors.assay.to"));
+  }
+  .streak-v {
+    background-image: linear-gradient(180deg, theme("colors.assay.from"), theme("colors.assay.to"));
+  }
+  .eyebrow {
+    @apply text-2xs font-medium uppercase tracking-[0.14em] text-faint;
+  }
+  .hairline {
+    @apply border-line;
+  }
+  .skeleton {
+    @apply relative overflow-hidden bg-line/60 rounded;
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background-image: linear-gradient(90deg, transparent, rgba(255,255,255,0.65), transparent);
+  }
+}

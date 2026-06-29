@@ -1,0 +1,65 @@
+# Prometheus alerting rules for Touchstone (PrometheusRule CRD).
+# Install into the namespace watched by your Prometheus Operator.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: touchstone-alerts
+  labels:
+    app.kubernetes.io/part-of: touchstone
+    role: alert-rules
+spec:
+  groups:
+    - name: touchstone.availability
+      rules:
+        - alert: TouchstoneServiceDown
+          expr: up{job=~"touchstone-.*"} == 0
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "Touchstone target {{ $labels.job }} is down"
+            description: "Prometheus has not scraped {{ $labels.job }} for 5 minutes."
+
+        - alert: TouchstonePodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total{namespace="touchstone"}[15m]) > 0
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: "Pod {{ $labels.pod }} is restarting"
+            description: "Container restarts observed in namespace touchstone (requires kube-state-metrics)."
+
+    - name: touchstone.http
+      rules:
+        - alert: TouchstoneHighErrorRate
+          expr: |
+            sum by (job) (rate(touchstone_http_requests_total{status=~"5.."}[5m]))
+              /
+            sum by (job) (rate(touchstone_http_requests_total[5m])) > 0.05
+          for: 10m
+          labels: { severity: critical }
+          annotations:
+            summary: "High 5xx rate on {{ $labels.job }}"
+            description: "5xx error ratio above 5% for 10 minutes on {{ $labels.job }}."
+
+        - alert: TouchstoneHighLatencyP95
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le, job) (rate(touchstone_http_request_duration_seconds_bucket[5m]))
+            ) > 1
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "p95 latency > 1s on {{ $labels.job }}"
+            description: "95th percentile request latency exceeds 1s for 10 minutes."
+
+    - name: touchstone.saturation
+      rules:
+        - alert: TouchstoneHpaMaxedOut
+          expr: |
+            kube_horizontalpodautoscaler_status_current_replicas{namespace="touchstone"}
+              >=
+            kube_horizontalpodautoscaler_spec_max_replicas{namespace="touchstone"}
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: "HPA {{ $labels.horizontalpodautoscaler }} at max replicas"
+            description: "Autoscaler has been pinned at its ceiling for 15m; consider raising maxReplicas."

@@ -1,0 +1,55 @@
+[project]
+name = "touchstone-verification-engine"
+version = "0.1.0"
+description = "Touchstone Verification Engine — executes verifiers (code/model/process/hybrid) and emits results."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.9,<3",
+    "pydantic-settings>=2.6,<3",
+    "sqlalchemy[asyncio]>=2.0.36,<2.1",
+    "asyncpg>=0.30",
+    "aiokafka>=0.12",
+    "httpx>=0.28",
+    "structlog>=24.4",
+    "touchstone-events",
+]
+
+[project.optional-dependencies]
+s3 = [
+    "boto3>=1.34",
+]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "coverage>=7.6",
+    "boto3>=1.34",
+    "moto[s3]>=5.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/touchstone_verify"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "C4", "PT"]
+# S108: /tmp default is the local-dev artifact path only.
+# ASYNC230: the file:// artifact backend is dev/CI convenience; prod uses async S3.
+ignore = ["S101", "S102", "S104", "S108", "UP042", "BLE001", "ASYNC230"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "PT011", "PT018"]
+"**/_harness.py" = ["S102"]

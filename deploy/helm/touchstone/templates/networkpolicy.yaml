@@ -1,0 +1,106 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $sel := include "touchstone.name" . }}
+---
+# Default deny all ingress + egress for Touchstone pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "touchstone.fullname" . }}-default-deny
+  labels:
+    {{- include "touchstone.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $sel }}
+  policyTypes: ["Ingress", "Egress"]
+---
+# Allow DNS egress (CoreDNS).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "touchstone.fullname" . }}-allow-dns
+  labels:
+    {{- include "touchstone.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $sel }}
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# Allow intra-app traffic (e.g. web BFF -> control-plane / RHD).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "touchstone.fullname" . }}-allow-intra
+  labels:
+    {{- include "touchstone.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $sel }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ $sel }}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ $sel }}
+---
+# Allow egress to managed datastores (RDS/ElastiCache/MSK) by port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "touchstone.fullname" . }}-allow-datastores
+  labels:
+    {{- include "touchstone.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $sel }}
+  policyTypes: ["Egress"]
+  egress:
+    - ports:
+        - port: {{ .Values.externalServices.postgresPort }}
+          protocol: TCP
+        - port: {{ .Values.externalServices.redisPort }}
+          protocol: TCP
+        - port: 9092
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+---
+# Allow ingress from the ingress controller to web pods on their http port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "touchstone.fullname" . }}-allow-ingress-controller
+  labels:
+    {{- include "touchstone.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $sel }}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector: {}
+      ports:
+        {{- range $name, $svc := .Values.services }}
+        {{- if eq $svc.kind "web" }}
+        - port: {{ $svc.port }}
+          protocol: TCP
+        {{- end }}
+        {{- end }}
+{{- end }}

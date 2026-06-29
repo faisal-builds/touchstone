@@ -1,0 +1,29 @@
+Touchstone {{ .Chart.AppVersion }} has been deployed as release "{{ .Release.Name }}"
+in namespace "{{ .Release.Namespace }}".
+
+Services deployed:
+{{- range $name, $svc := .Values.services }}
+  - {{ $name }} ({{ $svc.kind }}){{ if eq $svc.kind "web" }} :{{ $svc.port }}{{ end }}
+{{- end }}
+
+Next steps:
+  1. Confirm the secret "{{ .Values.secrets.secretName }}" is populated
+     {{- if .Values.secrets.external }} by the External Secrets Operator from
+     "{{ .Values.secrets.externalSecretRemoteKey }}".{{ else }}.{{ end }}
+  2. Check rollout:
+       kubectl -n {{ .Release.Namespace }} rollout status \
+         deploy/{{ include "touchstone.fullname" . }}-control-plane
+  3. Probe readiness:
+       kubectl -n {{ .Release.Namespace }} port-forward \
+         svc/{{ include "touchstone.fullname" . }}-control-plane 8000:8000
+       curl localhost:8000/readyz
+
+{{- if .Values.ingress.enabled }}
+
+Ingress hosts:
+{{- range $name, $svc := .Values.services }}
+{{- if and (eq $svc.kind "web") $svc.ingress }}
+  - https://{{ $svc.ingress.host }}  ->  {{ $name }}
+{{- end }}
+{{- end }}
+{{- end }}

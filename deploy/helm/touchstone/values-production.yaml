@@ -1,0 +1,63 @@
+# Production overlay — apply with:
+#   helm upgrade --install touchstone deploy/helm/touchstone \
+#     -n touchstone --create-namespace -f deploy/helm/touchstone/values-production.yaml
+#
+# Endpoint values (registry, datastore hosts, certificate ARN) are emitted by
+# Terraform — wire them in from `terraform output` (see deploy/terraform/README).
+
+image:
+  registry: 0123456789.dkr.ecr.us-east-1.amazonaws.com/touchstone
+  tag: "1.0.0"            # pin to an immutable release tag in production
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  annotations:
+    # From terraform output -raw irsa_app_role_arn
+    eks.amazonaws.com/role-arn: arn:aws:iam::0123456789:role/touchstone-app
+
+externalServices:
+  # From terraform outputs: rds_endpoint / elasticache_endpoint / msk_brokers / artifact_bucket
+  postgresHost: REPLACE_WITH_terraform_output_rds_endpoint
+  postgresPort: 5432
+  postgresDatabase: touchstone
+  redisHost: REPLACE_WITH_terraform_output_elasticache_endpoint
+  redisPort: 6379
+  kafkaBrokers: REPLACE_WITH_terraform_output_msk_brokers
+  artifactStoreUri: s3://REPLACE_WITH_terraform_output_artifact_bucket
+
+secrets:
+  create: false
+  external: true
+  externalSecretStore: aws-secrets-manager
+  externalSecretRemoteKey: touchstone/production
+  secretName: touchstone-secrets
+
+config:
+  environment: production
+  logLevel: INFO
+  corsOrigins: "https://app.touchstone.example.com"
+  rateLimitPerMinute: "600"
+  rateLimitBurst: "120"
+  otelExporterOtlpEndpoint: "http://otel-collector.observability:4317"
+  sandboxBackend: gvisor
+  sandboxImage: 0123456789.dkr.ecr.us-east-1.amazonaws.com/touchstone/sandbox:1.0.0
+  # Never silently weaken isolation in production.
+  sandboxAllowFallback: "false"
+
+ingress:
+  enabled: true
+  className: alb
+  tls:
+    enabled: true
+    # From terraform output -raw acm_certificate_arn
+    certificateArn: arn:aws:acm:us-east-1:0123456789:certificate/REPLACE
+
+networkPolicy:
+  enabled: true
+serviceMonitor:
+  enabled: true
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+priorityClassName: touchstone-high

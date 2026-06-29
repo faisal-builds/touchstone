@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "touchstone.fullname" . }}-config
+  labels:
+    {{- include "touchstone.labels" . | nindent 4 }}
+data:
+  # Environment + logging (all service prefixes; each service ignores unknowns).
+  TOUCHSTONE_ENVIRONMENT: {{ .Values.config.environment | quote }}
+  TOUCHSTONE_VERIFY_ENVIRONMENT: {{ .Values.config.environment | quote }}
+  TOUCHSTONE_RISK_ENVIRONMENT: {{ .Values.config.environment | quote }}
+  TOUCHSTONE_AUDIT_ENVIRONMENT: {{ .Values.config.environment | quote }}
+  TOUCHSTONE_RHD_ENVIRONMENT: {{ .Values.config.environment | quote }}
+  TOUCHSTONE_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  TOUCHSTONE_RHD_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+
+  # Control-plane HTTP knobs.
+  TOUCHSTONE_CORS_ORIGINS: {{ .Values.config.corsOrigins | quote }}
+  TOUCHSTONE_RATE_LIMIT_PER_MINUTE: {{ .Values.config.rateLimitPerMinute | quote }}
+  TOUCHSTONE_RATE_LIMIT_BURST: {{ .Values.config.rateLimitBurst | quote }}
+
+  # Tracing (OTLP). Empty disables tracing.
+  TOUCHSTONE_OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.config.otelExporterOtlpEndpoint | quote }}
+  TOUCHSTONE_RHD_OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.config.otelExporterOtlpEndpoint | quote }}
+
+  # Event backbone (Kafka/Redpanda) — non-secret broker list.
+  TOUCHSTONE_VERIFY_REDPANDA_BROKERS: {{ .Values.externalServices.kafkaBrokers | quote }}
+  TOUCHSTONE_RISK_REDPANDA_BROKERS: {{ .Values.externalServices.kafkaBrokers | quote }}
+  TOUCHSTONE_AUDIT_REDPANDA_BROKERS: {{ .Values.externalServices.kafkaBrokers | quote }}
+  TOUCHSTONE_RHD_REDPANDA_BROKERS: {{ .Values.externalServices.kafkaBrokers | quote }}
+
+  # Sandbox isolation (ADR-002) for the verification engine.
+  TOUCHSTONE_VERIFY_SANDBOX_BACKEND: {{ .Values.config.sandboxBackend | quote }}
+  TOUCHSTONE_VERIFY_SANDBOX_IMAGE: {{ .Values.config.sandboxImage | quote }}
+  TOUCHSTONE_VERIFY_SANDBOX_ALLOW_FALLBACK: {{ .Values.config.sandboxAllowFallback | quote }}
+
+  # Sandbox isolation for the reward-hacking-detector (attacks run verifier code).
+  TOUCHSTONE_RHD_SANDBOX_BACKEND: {{ .Values.config.sandboxBackend | quote }}
+  TOUCHSTONE_RHD_SANDBOX_IMAGE: {{ .Values.config.sandboxImage | quote }}
+  TOUCHSTONE_RHD_SANDBOX_ALLOW_FALLBACK: {{ .Values.config.sandboxAllowFallback | quote }}
+
+  # Artifact object store (S3 in production).
+  TOUCHSTONE_VERIFY_ARTIFACT_STORE_URI: {{ .Values.externalServices.artifactStoreUri | quote }}
+
+  # Auth federation: the reward-hacking-detector validates tsk_ API keys by
+  # calling the control-plane's internal introspection endpoint (it never reads
+  # the api_keys table), so it can run on a fully isolated database.
+  TOUCHSTONE_RHD_CONTROL_PLANE_URL: {{ printf "http://%s-control-plane:8000" (include "touchstone.fullname" .) | quote }}
+
+  # --- Inline Verification Plane (IVP) ---------------------------------------
+  # The IVP is the inline/critical-path gateway. Like the RHD it validates tsk_
+  # keys via the control-plane introspection endpoint (reads no control-plane
+  # tables) and runs the fast tier's code verifiers in a gVisor microVM.
+  TOUCHSTONE_IVP_ENVIRONMENT: {{ .Values.config.environment | quote }}
+  TOUCHSTONE_IVP_REDPANDA_BROKERS: {{ .Values.externalServices.kafkaBrokers | quote }}
+  TOUCHSTONE_IVP_CONTROL_PLANE_URL: {{ printf "http://%s-control-plane:8000" (include "touchstone.fullname" .) | quote }}
+  TOUCHSTONE_IVP_SANDBOX_BACKEND: {{ .Values.config.sandboxBackend | quote }}
+  TOUCHSTONE_IVP_SANDBOX_ALLOW_FALLBACK: {{ .Values.config.sandboxAllowFallback | quote }}
+  # Multi-region identity + global policy distribution (enterprise / M1).
+  TOUCHSTONE_IVP_REGION_ID: {{ .Values.config.regionId | default "local" | quote }}
+  TOUCHSTONE_IVP_REGION_LOCALITY: {{ .Values.config.regionLocality | default "local" | quote }}
+  TOUCHSTONE_IVP_DISTRIBUTION_ENABLED: {{ .Values.config.ivpDistributionEnabled | default false | quote }}
+  TOUCHSTONE_IVP_WARM_POOL_ENABLED: {{ .Values.config.ivpWarmPoolEnabled | default false | quote }}

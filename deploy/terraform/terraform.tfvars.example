@@ -1,0 +1,10 @@
+region                     = "us-east-1"
+environment                = "production"
+vpc_cidr                   = "10.40.0.0/16"
+availability_zone_count    = 3
+cluster_version            = "1.30"
+postgres_version           = "16.3"
+postgres_instance_class    = "db.r6g.large"
+postgres_allocated_storage = 100
+redis_node_type            = "cache.r6g.large"
+domain_name                = "touchstone.example.com"

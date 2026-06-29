@@ -1,0 +1,38 @@
+{{- if .Values.ingress.enabled }}
+{{- range $name, $svc := .Values.services }}
+{{- if and (eq $svc.kind "web") $svc.ingress }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "touchstone.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "touchstone.serviceLabels" (dict "root" $ "name" $name) | nindent 4 }}
+  annotations:
+    {{- with $.Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- if and $.Values.ingress.tls.enabled $.Values.ingress.tls.certificateArn }}
+    alb.ingress.kubernetes.io/certificate-arn: {{ $.Values.ingress.tls.certificateArn }}
+    {{- end }}
+spec:
+  ingressClassName: {{ $.Values.ingress.className }}
+  {{- if $.Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ $svc.ingress.host | quote }}
+  {{- end }}
+  rules:
+    - host: {{ $svc.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ $svc.ingress.path | default "/" }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "touchstone.fullname" $ }}-{{ $name }}
+                port:
+                  number: {{ $svc.port }}
+{{- end }}
+{{- end }}
+{{- end }}

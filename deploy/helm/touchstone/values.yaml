@@ -1,0 +1,327 @@
+# Touchstone Helm values — production defaults.
+#
+# Datastores (PostgreSQL, Redis, Kafka) are NOT deployed by this chart; they are
+# provisioned by Terraform (RDS, ElastiCache, MSK/Redpanda Cloud) and referenced
+# here via `externalServices` + secrets. Override per environment with a values
+# file (see values-production.yaml).
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  # Container registry that hosts the service images (e.g. an ECR registry).
+  registry: ghcr.io/touchstone
+  # Default image tag for all services; pin to an immutable release in prod.
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+# Names of imagePullSecrets that already exist in the namespace.
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ""
+  # For IRSA on EKS, set the IAM role ARN that grants S3 (artifact store) access.
+  annotations: {}
+    # eks.amazonaws.com/role-arn: arn:aws:iam::<account>:role/touchstone-app
+
+# Pod-level hardening applied to every workload.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+# Connection endpoints for managed datastores (host/port are non-secret; the
+# credentials and full URLs come from the secret below).
+externalServices:
+  postgresHost: touchstone.cluster-xxxx.us-east-1.rds.amazonaws.com
+  postgresPort: 5432
+  postgresDatabase: touchstone
+  redisHost: touchstone.xxxx.ng.0001.use1.cache.amazonaws.com
+  redisPort: 6379
+  kafkaBrokers: b-1.touchstone.xxxx.kafka.us-east-1.amazonaws.com:9092
+  artifactStoreUri: s3://touchstone-artifacts-prod
+
+# Secret management. In production prefer `external` so the Secret is created by
+# the External Secrets Operator from AWS Secrets Manager (see secret.yaml); the
+# chart never holds plaintext. For a quick bootstrap, set create=true and supply
+# values (NOT recommended for prod).
+secrets:
+  create: false
+  # When external=true, an ExternalSecret is rendered instead of a Secret.
+  external: true
+  externalSecretStore: aws-secrets-manager
+  externalSecretRemoteKey: touchstone/production
+  secretName: touchstone-secrets
+  # Used only when create=true (dev/bootstrap):
+  data:
+    TOUCHSTONE_JWT_SECRET: ""
+    TOUCHSTONE_DATABASE_PASSWORD: ""
+    TOUCHSTONE_ANTHROPIC_API_KEY: ""
+    # Per-service database DSNs. After the per-service-DB split:
+    #   * reward-hacking-detector owns its evaluation/exploit/verifier-replica
+    #     tables in its OWN database (TOUCHSTONE_RHD_DATABASE_URL);
+    #   * the audit-engine owns audit_records in its OWN database
+    #     (TOUCHSTONE_AUDIT_DATABASE_URL) — the control-plane reads it read-only
+    #     through that same DSN (its audit_database_url resolves to this var);
+    #   * control-plane, verification-engine and risk-engine share the
+    #     control-plane database.
+    # Each owning service provisions its database with its own Alembic migrations.
+    #
+    # Auth federation is complete: RHD validates tsk_ API keys via the
+    # control-plane introspection endpoint (TOUCHSTONE_RHD_CONTROL_PLANE_URL) and
+    # reads nothing from the control-plane database, so BOTH the RHD and audit
+    # databases can be fully isolated today.
+    TOUCHSTONE_DATABASE_URL: ""
+    TOUCHSTONE_VERIFY_DATABASE_URL: ""
+    TOUCHSTONE_RISK_DATABASE_URL: ""
+    TOUCHSTONE_AUDIT_DATABASE_URL: ""
+    TOUCHSTONE_RHD_DATABASE_URL: ""
+
+# Shared, non-secret configuration injected into every pod via a ConfigMap.
+config:
+  environment: production
+  logLevel: INFO
+  corsOrigins: "https://app.touchstone.example.com"
+  rateLimitPerMinute: "600"
+  rateLimitBurst: "120"
+  otelExporterOtlpEndpoint: "http://otel-collector.observability:4317"
+  # Sandbox isolation backend for the verification engine + RHD workers.
+  sandboxBackend: gvisor
+  sandboxImage: ghcr.io/touchstone/sandbox:1.0.0
+  sandboxAllowFallback: "false"
+
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+  tls:
+    enabled: true
+    # ACM certificate ARN (annotation form) or a cert-manager secret.
+    certificateArn: ""
+
+networkPolicy:
+  enabled: true
+
+serviceMonitor:
+  # Requires the Prometheus Operator CRDs.
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+priorityClassName: ""
+
+# Default probe + lifecycle timings (overridable per service).
+defaults:
+  terminationGracePeriodSeconds: 40
+  livenessProbe:
+    path: /healthz
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readinessProbe:
+    path: /readyz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# ---------------------------------------------------------------------------
+# Per-service definitions. `kind: web` services expose an HTTP port, Service,
+# Ingress, and HTTP probes; `kind: worker` services are headless consumers with
+# an exec liveness probe and no Service.
+# ---------------------------------------------------------------------------
+services:
+  control-plane:
+    kind: web
+    image:
+      repository: control-plane
+    port: 8000
+    replicas: 3
+    command: ["uvicorn", "touchstone_control.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 12
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+    resources:
+      requests: { cpu: "250m", memory: "512Mi" }
+      limits: { cpu: "1000m", memory: "1Gi" }
+    ingress:
+      host: api.touchstone.example.com
+      path: /
+
+  verification-engine:
+    kind: worker
+    image:
+      repository: verification-engine
+    command: ["python", "-m", "touchstone_verify.main"]
+    replicas: 3
+    # Code verifiers run in a gVisor microVM; the worker pod needs the runtime.
+    runtimeClassName: gvisor
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 20
+      targetCPUUtilizationPercentage: 65
+    resources:
+      requests: { cpu: "500m", memory: "1Gi" }
+      limits: { cpu: "2000m", memory: "2Gi" }
+
+  risk-engine:
+    kind: worker
+    image:
+      repository: risk-engine
+    command: ["python", "-m", "touchstone_risk.main"]
+    replicas: 2
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+
+  audit-engine:
+    kind: worker
+    image:
+      repository: audit-engine
+    command: ["python", "-m", "touchstone_audit.main"]
+    replicas: 2
+    # The audit hash chain is per-org append-only; keep a modest, stable pool.
+    autoscaling:
+      enabled: false
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+
+  reward-hacking-detector:
+    kind: web
+    image:
+      repository: reward-hacking-detector
+    port: 8030
+    replicas: 2
+    command: ["uvicorn", "touchstone_rhd.main:app", "--host", "0.0.0.0", "--port", "8030"]
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+    resources:
+      requests: { cpu: "250m", memory: "512Mi" }
+      limits: { cpu: "1000m", memory: "1Gi" }
+    ingress:
+      host: robustness.touchstone.example.com
+      path: /
+
+  reward-hacking-detector-worker:
+    kind: worker
+    image:
+      repository: reward-hacking-detector
+    command: ["python", "-m", "touchstone_rhd.worker_main"]
+    replicas: 2
+    runtimeClassName: gvisor
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 16
+      targetCPUUtilizationPercentage: 65
+    resources:
+      requests: { cpu: "500m", memory: "1Gi" }
+      limits: { cpu: "2000m", memory: "2Gi" }
+
+  # Single-writer of verifiers.robustness_score: consumes RHD's
+  # reward_hacking.robustness_evaluated events and applies the score to the
+  # verifier row (the control-plane owns the verifiers table).
+  control-plane-robustness-consumer:
+    kind: worker
+    image:
+      repository: control-plane
+    command: ["python", "-m", "touchstone_control.consumer_main"]
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+
+  # Inline Verification Plane — the inline/critical-path gateway. allow/block/
+  # redact/escalate decisions on live AI traffic within a latency budget. Runs the
+  # fast tier's code verifiers in a gVisor microVM in the hot path, validates tsk_
+  # keys via control-plane introspection, and emits inline.decision (audit),
+  # inline.escalated (verification-engine), inline.evasion_observed (RHD).
+  ivp:
+    kind: web
+    image:
+      repository: ivp
+    port: 8050
+    replicas: 3
+    command: ["uvicorn", "touchstone_ivp.main:app", "--factory", "--host", "0.0.0.0", "--port", "8050"]
+    runtimeClassName: gvisor
+    livenessProbe: { path: /healthz }
+    readinessProbe: { path: /readyz }
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      # Inline sits in the customer's request path; scale aggressively on CPU.
+      maxReplicas: 24
+      targetCPUUtilizationPercentage: 60
+    resources:
+      requests: { cpu: "500m", memory: "512Mi" }
+      limits: { cpu: "2000m", memory: "1Gi" }
+    env:
+      # The plane signs its introspection service-token with the shared JWT secret.
+      - name: TOUCHSTONE_IVP_JWT_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: touchstone-secrets
+            key: TOUCHSTONE_JWT_SECRET
+    ingress:
+      host: inline.touchstone.example.com
+      path: /
+
+  web:
+    kind: web
+    image:
+      repository: web
+    port: 3000
+    replicas: 2
+    command: ["node", "server.js"]
+    # The dashboard is a BFF; its readiness is the process being up.
+    livenessProbe: { path: /login }
+    readinessProbe: { path: /login }
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 75
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+    env:
+      - name: CONTROL_PLANE_URL
+        value: http://control-plane:8000
+      - name: RHD_URL
+        value: http://reward-hacking-detector:8030
+      - name: IVP_URL
+        value: http://ivp:8050
+    ingress:
+      host: app.touchstone.example.com
+      path: /

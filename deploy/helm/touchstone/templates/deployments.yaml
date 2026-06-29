@@ -1,0 +1,106 @@
+{{- range $name, $svc := .Values.services }}
+{{- $isWeb := eq $svc.kind "web" }}
+{{- $lp := $svc.livenessProbe | default dict }}
+{{- $rp := $svc.readinessProbe | default dict }}
+{{- $auto := $svc.autoscaling | default dict }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "touchstone.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "touchstone.serviceLabels" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  {{- if not $auto.enabled }}
+  replicas: {{ $svc.replicas | default 1 }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "touchstone.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "touchstone.selectorLabels" (dict "root" $ "name" $name) | nindent 8 }}
+      annotations:
+        # Roll pods when shared config changes.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
+        {{- if $isWeb }}
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: {{ $svc.port | quote }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "touchstone.serviceAccountName" $ }}
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      {{- if $.Values.priorityClassName }}
+      priorityClassName: {{ $.Values.priorityClassName }}
+      {{- end }}
+      {{- if $svc.runtimeClassName }}
+      # microVM/gVisor runtime for pods that execute untrusted verifier code.
+      runtimeClassName: {{ $svc.runtimeClassName }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ $.Values.defaults.terminationGracePeriodSeconds }}
+      containers:
+        - name: {{ $name }}
+          image: {{ include "touchstone.image" (dict "root" $ "svc" $svc) }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          {{- with $svc.command }}
+          command: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if $isWeb }}
+          ports:
+            - name: http
+              containerPort: {{ $svc.port }}
+              protocol: TCP
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "touchstone.fullname" $ }}-config
+            - secretRef:
+                name: {{ $.Values.secrets.secretName }}
+          {{- with $svc.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
+          {{- if $isWeb }}
+          livenessProbe:
+            httpGet:
+              path: {{ $lp.path | default $.Values.defaults.livenessProbe.path }}
+              port: http
+            initialDelaySeconds: {{ $.Values.defaults.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ $.Values.defaults.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ $.Values.defaults.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ $.Values.defaults.livenessProbe.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ $rp.path | default $.Values.defaults.readinessProbe.path }}
+              port: http
+            initialDelaySeconds: {{ $.Values.defaults.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ $.Values.defaults.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ $.Values.defaults.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ $.Values.defaults.readinessProbe.failureThreshold }}
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # readOnlyRootFilesystem is on; provide a writable scratch dir.
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+{{- end }}

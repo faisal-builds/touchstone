@@ -1,0 +1,26 @@
+apiVersion: v2
+name: touchstone
+description: >-
+  The Touchstone AI verification layer — control-plane, verification/risk/audit
+  engines, the reward-hacking detector, and the operator dashboard. Datastores
+  (PostgreSQL, Redis, Kafka) are provisioned out-of-band (see deploy/terraform)
+  and referenced via configuration.
+type: application
+# Chart version (SemVer) — bump on chart changes.
+version: 1.0.0
+# Application version — the Touchstone platform release this chart deploys.
+appVersion: "1.0.0"
+kubeVersion: ">=1.27.0-0"
+home: https://touchstone.example.com
+sources:
+  - https://github.com/touchstone/touchstone
+maintainers:
+  - name: Touchstone Platform Team
+    email: platform@touchstone.example.com
+keywords:
+  - ai
+  - verification
+  - security
+  - reward-hacking
+annotations:
+  category: AIInfrastructure

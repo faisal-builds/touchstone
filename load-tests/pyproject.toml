@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "touchstone-load-tests"
+version = "0.1.0"
+description = "Load and performance testing suite for Touchstone (Locust)."
+requires-python = ">=3.12"
+dependencies = [
+    "locust>=2.40",
+    "requests>=2.32",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.8",
+]
+
+[tool.setuptools]
+packages = ["touchstone_load"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
