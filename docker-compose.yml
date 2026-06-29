@@ -162,6 +162,11 @@ services:
       TOUCHSTONE_RHD_JWT_SECRET: local-dev-secret-change-me-in-prod-please
       TOUCHSTONE_RHD_AUTO_EVALUATE_ON_REGISTER: "true"
     cap_add: ["SYS_ADMIN"]
+    # This reuses the RHD image (which has an HTTP HEALTHCHECK) but runs the
+    # headless worker with no HTTP port, so the inherited probe would always
+    # fail. Disable it — the worker's liveness is the process + restart policy.
+    healthcheck:
+      disable: true
 
   # Inline Verification Plane — the inline/critical-path gateway (ADR-015). The
   # dashboard's BFF proxies to it (IVP_URL). Stateless: reads no DB, validates

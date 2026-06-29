@@ -17,7 +17,10 @@ RUN npm run build
 
 FROM node:20-slim AS runner
 WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
+# HOSTNAME=0.0.0.0 makes the Next standalone server bind all interfaces. Without
+# it Next binds $HOSTNAME (Docker sets it to the container id -> the container IP),
+# so an in-container probe to 127.0.0.1 is refused even though the app is up.
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 RUN groupadd --system --gid 1001 nodejs \
     && useradd --system --uid 1001 --gid nodejs nextjs
 COPY --from=builder /app/public ./public
