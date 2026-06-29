@@ -70,7 +70,17 @@ jobs:
         run: PYTHONPATH=src alembic upgrade head
 
       - name: Test
-        run: PYTHONPATH=src pytest tests/ -q --cov=touchstone_control --cov-report=term-missing
+        run: PYTHONPATH=src pytest tests/ -q --cov=touchstone_control --cov-report=term-missing --cov-report=xml --junitxml=reports/junit.xml
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-plane-reports
+          path: |
+            services/control-plane/reports/junit.xml
+            services/control-plane/coverage.xml
+          if-no-files-found: ignore
 
   verification-engine:
     runs-on: ubuntu-latest
@@ -116,7 +126,14 @@ jobs:
       - name: Enable unprivileged user namespaces (sandbox)
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Test
-        run: PYTHONPATH=src pytest tests/ -q
+        run: PYTHONPATH=src pytest tests/ -q --junitxml=reports/junit.xml
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-engine-reports
+          path: services/verification-engine/reports/junit.xml
+          if-no-files-found: ignore
 
   risk-engine:
     runs-on: ubuntu-latest
@@ -156,7 +173,14 @@ jobs:
       - name: Lint
         run: ruff check src
       - name: Test
-        run: PYTHONPATH=src pytest tests/ -q
+        run: PYTHONPATH=src pytest tests/ -q --junitxml=reports/junit.xml
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: risk-engine-reports
+          path: services/risk-engine/reports/junit.xml
+          if-no-files-found: ignore
 
   audit-engine:
     runs-on: ubuntu-latest
@@ -196,7 +220,14 @@ jobs:
       - name: Lint
         run: ruff check src
       - name: Test
-        run: PYTHONPATH=src pytest tests/ -q
+        run: PYTHONPATH=src pytest tests/ -q --junitxml=reports/junit.xml
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-engine-reports
+          path: services/audit-engine/reports/junit.xml
+          if-no-files-found: ignore
 
   reward-hacking-detector:
     runs-on: ubuntu-latest
@@ -241,7 +272,14 @@ jobs:
       - name: Enable unprivileged user namespaces (sandbox)
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Test
-        run: PYTHONPATH=src pytest tests/ -q
+        run: PYTHONPATH=src pytest tests/ -q --junitxml=reports/junit.xml
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reward-hacking-detector-reports
+          path: services/reward-hacking-detector/reports/junit.xml
+          if-no-files-found: ignore
 
   ivp:
     runs-on: ubuntu-latest
@@ -270,7 +308,67 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Test
         # The IVP has no datastore; tests run the real sandbox in-process.
-        run: PYTHONPATH=src pytest tests/ -q
+        run: PYTHONPATH=src pytest tests/ -q --junitxml=reports/junit.xml
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ivp-reports
+          path: services/ivp/reports/junit.xml
+          if-no-files-found: ignore
+
+  python-sdk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdks/python
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: touchstone
+          POSTGRES_PASSWORD: touchstone
+          POSTGRES_DB: touchstone
+          # The e2e boots the control-plane in-process against this DB; tests
+          # connect passwordless (touchstone@host) so trust auth lets them in.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U touchstone"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TOUCHSTONE_ENVIRONMENT: ci
+      TOUCHSTONE_JWT_SECRET: ci-secret-key-at-least-32-bytes-long!!
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ../../libs/touchstone-events
+          # The e2e test runs the real control-plane app over HTTP via the SDK.
+          pip install -e ../../services/control-plane
+          pip install -e ".[dev]"
+      - name: Migrate (control-plane schema for the e2e)
+        run: cd ../../services/control-plane && PYTHONPATH=src alembic upgrade head
+      - name: Lint
+        run: ruff check src tests
+      - name: Test
+        run: PYTHONPATH=src pytest tests/ -q --junitxml=reports/junit.xml
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-sdk-reports
+          path: sdks/python/reports/junit.xml
+          if-no-files-found: ignore
 
   web:
     runs-on: ubuntu-latest
@@ -296,6 +394,13 @@ jobs:
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+      - name: Upload web build artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-standalone-build
+          path: apps/web/.next/standalone
+          if-no-files-found: ignore
 
   typescript-sdk:
     runs-on: ubuntu-latest
@@ -319,10 +424,28 @@ jobs:
         run: npm run test
       - name: Build (ESM + CJS + types)
         run: npm run build
+      - name: Upload SDK build artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: typescript-sdk-dist
+          path: sdks/typescript/dist
+          if-no-files-found: ignore
+
+  compose-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate docker-compose config
+        run: |
+          docker compose config --quiet
+          echo "docker compose config OK"
+      - name: List resolved services
+        run: docker compose config --services
 
   docker-build:
     runs-on: ubuntu-latest
-    needs: [control-plane, verification-engine, risk-engine, audit-engine, reward-hacking-detector, ivp, web]
+    needs: [control-plane, verification-engine, risk-engine, audit-engine, reward-hacking-detector, ivp, python-sdk, web]
     strategy:
       matrix:
         include:
