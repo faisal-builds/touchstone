@@ -32,7 +32,7 @@ jobs:
             -n touchstone -f deploy/helm/touchstone/values-production.yaml > rendered.yaml
           test -s rendered.yaml
       - name: Validate rendered manifests (kubeconform)
-        uses: docker://ghcr.io/yannh/kubeconform:latest
+        uses: docker://ghcr.io/yannh/kubeconform:v0.8.0
         with:
           # NOTE: do not single-quote the schema-location URL. The action passes
           # `args` as one string and word-splits it, so the quotes would be taken
@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate raw manifests (kubeconform)
-        uses: docker://ghcr.io/yannh/kubeconform:latest
+        uses: docker://ghcr.io/yannh/kubeconform:v0.8.0
         with:
           args: "-strict -ignore-missing-schemas -summary deploy/k8s/"
 
@@ -70,6 +70,10 @@ jobs:
         run: terraform validate
       - name: tflint
         uses: terraform-linters/setup-tflint@v4
+        with:
+          # Pin the linter so an upstream tflint release can't change the rules
+          # under us and break CI without a code change. Verified at this version.
+          tflint_version: v0.63.1
       - run: tflint --recursive
 
   policy-scan:

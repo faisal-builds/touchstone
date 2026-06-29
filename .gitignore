@@ -33,3 +33,5 @@ crash.log
 reports/
 coverage.xml
 junit.xml
+# Helm render output (produced by infra-validation / deploy-dryrun in the workspace)
+rendered.yaml
