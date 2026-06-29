@@ -246,8 +246,12 @@ function Do-Clean {
     if (Test-Path $d) { Remove-Item -Recurse -Force $d }
   }
   Get-ChildItem -Recurse -Directory -Force -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -in @("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache") } |
+    Where-Object { $_.Name -in @("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "reports") } |
     ForEach-Object { Remove-Item -Recurse -Force $_.FullName -ErrorAction SilentlyContinue }
+  Get-ChildItem -Recurse -File -Force -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -in @(".coverage", "coverage.xml", "junit.xml") } |
+    ForEach-Object { Remove-Item -Force $_.FullName -ErrorAction SilentlyContinue }
+  if (Test-Path rendered.yaml) { Remove-Item -Force rendered.yaml -ErrorAction SilentlyContinue }
   if (Test-Path .artifacts) {
     Get-ChildItem .artifacts -Force -ErrorAction SilentlyContinue |
       Where-Object { $_.Name -ne ".gitkeep" } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue

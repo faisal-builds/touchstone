@@ -137,6 +137,8 @@ clean: ## Tear down the stack (with volumes) and remove caches/venv/artifacts
 	find . -type d -name '.mypy_cache' -prune -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name '.ruff_cache' -prune -exec rm -rf {} + 2>/dev/null || true
 	rm -rf apps/web/.next apps/web/node_modules sdks/typescript/node_modules sdks/typescript/dist
-	rm -f .coverage */.coverage **/coverage.xml **/junit.xml
+	find . -type f \( -name '.coverage' -o -name 'coverage.xml' -o -name 'junit.xml' \) -delete 2>/dev/null || true
+	find . -type d -name reports -prune -exec rm -rf {} + 2>/dev/null || true
+	rm -f rendered.yaml
 	find .artifacts -mindepth 1 -not -name '.gitkeep' -delete 2>/dev/null || true
 	@echo "✓ clean: stack, volumes, caches, venv, node_modules and artifacts removed"
