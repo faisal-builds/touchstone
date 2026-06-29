@@ -6,6 +6,9 @@ members = ["services/*", "libs/*", "sdks/python"]
 
 [tool.uv.sources]
 touchstone-events = { workspace = true }
+touchstone-verification-engine = { workspace = true }
+touchstone-risk-engine = { workspace = true }
+touchstone-fleet = { workspace = true }
 
 [tool.ruff]
 line-length = 95
