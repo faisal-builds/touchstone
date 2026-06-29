@@ -11,7 +11,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.36,<2.1",
     "asyncpg>=0.30",
     "alembic>=1.14",
-    "aiokafka>=0.12",
+    "aiokafka[lz4]>=0.12",  # lz4 extra: producer uses compression_type="lz4"
     "structlog>=24.4",
     "prometheus-client>=0.20",
     "httpx>=0.27",
