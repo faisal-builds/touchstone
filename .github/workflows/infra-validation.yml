@@ -34,10 +34,13 @@ jobs:
       - name: Validate rendered manifests (kubeconform)
         uses: docker://ghcr.io/yannh/kubeconform:latest
         with:
+          # NOTE: do not single-quote the schema-location URL. The action passes
+          # `args` as one string and word-splits it, so the quotes would be taken
+          # literally into the URL (parse error on the CRD catalog template).
           args: >-
             -strict -ignore-missing-schemas
             -schema-location default
-            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+            -schema-location https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
             rendered.yaml
 
   k8s-manifests:
