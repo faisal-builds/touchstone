@@ -233,6 +233,10 @@ jobs:
           cd ../control-plane && PYTHONPATH=src alembic upgrade head
       - name: Lint
         run: ruff check src tests
+      # Attacks execute through the verification-engine sandbox (unshare
+      # --map-root-user), which ubuntu-24.04 blocks via AppArmor. Re-enable.
+      - name: Enable unprivileged user namespaces (sandbox)
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Test
         run: PYTHONPATH=src pytest tests/ -q
 
