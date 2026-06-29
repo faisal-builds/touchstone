@@ -45,6 +45,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
   rule {
     id     = "expire-noncurrent"
     status = "Enabled"
+    # Apply to all objects. An explicit (empty) filter is required by the AWS
+    # provider; without it the rule reports an invalid attribute combination.
+    filter {}
     noncurrent_version_expiration {
       noncurrent_days = 90
     }

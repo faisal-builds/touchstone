@@ -24,10 +24,13 @@ jobs:
       - name: helm lint
         run: helm lint deploy/helm/touchstone -f deploy/helm/touchstone/values-production.yaml
       - name: helm template
+        # Render into the workspace, not /tmp: the kubeconform step below runs as
+        # a Docker action that only mounts $GITHUB_WORKSPACE (/github/workspace),
+        # so a /tmp path on the runner is invisible inside that container.
         run: |
           helm template touchstone deploy/helm/touchstone \
-            -n touchstone -f deploy/helm/touchstone/values-production.yaml > /tmp/rendered.yaml
-          test -s /tmp/rendered.yaml
+            -n touchstone -f deploy/helm/touchstone/values-production.yaml > rendered.yaml
+          test -s rendered.yaml
       - name: Validate rendered manifests (kubeconform)
         uses: docker://ghcr.io/yannh/kubeconform:latest
         with:
@@ -35,7 +38,7 @@ jobs:
             -strict -ignore-missing-schemas
             -schema-location default
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
-            /tmp/rendered.yaml
+            rendered.yaml
 
   k8s-manifests:
     runs-on: ubuntu-latest
