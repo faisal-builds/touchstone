@@ -108,31 +108,49 @@ jobs:
             "oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts"
 
   deploy:
+    # DESIGN — not yet provisioned. This job is intentionally a PLACEHOLDER: it
+    # performs NO live AWS or Kubernetes actions. The real OIDC auth + helm
+    # upgrade are kept commented out below and will be enabled only once the EKS
+    # cluster is provisioned and this environment's OIDC trust + secrets exist.
+    # The `environment: production` gate already requires a reviewer to approve
+    # before this job can run.
     needs: [version, publish-images, publish-chart]
     runs-on: ubuntu-latest
     environment: production   # requires a reviewer approval before it runs
     steps:
       - uses: actions/checkout@v4
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-      - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }}
-      - uses: azure/setup-helm@v4
-        with:
-          version: v3.14.4
-      - name: Helm upgrade
+      - name: Deploy (placeholder — no live cloud actions)
         run: |
-          helm upgrade --install touchstone \
-            "oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts/touchstone" \
-            --version "${{ needs.version.outputs.version }}" \
-            --namespace touchstone --create-namespace \
-            -f deploy/helm/touchstone/values-production.yaml \
-            --set image.registry=${{ env.REGISTRY }}/${{ github.repository_owner }} \
-            --set image.tag=${{ needs.version.outputs.version }} \
-            --wait --timeout 10m --atomic
-      - name: Verify rollout
-        run: |
-          kubectl -n touchstone rollout status deploy/touchstone-control-plane --timeout=5m
+          echo "DESIGN placeholder: no live deploy is performed in this pipeline."
+          echo "Would deploy version '${{ needs.version.outputs.version }}' to the production cluster."
+          echo
+          echo "To enable a real deploy, provision EKS + configure this environment's"
+          echo "OIDC trust and secrets, then re-enable the commented steps below:"
+          echo "  - aws-actions/configure-aws-credentials  (OIDC, no static keys)"
+          echo "  - aws eks update-kubeconfig --name <cluster>"
+          echo "  - helm upgrade --install touchstone oci://.../charts/touchstone --atomic --wait"
+          echo "  - kubectl -n touchstone rollout status deploy/touchstone-control-plane"
+      # --- Real deploy steps (DISABLED until the cluster is provisioned) -------
+      # - name: Configure AWS credentials (OIDC)
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+      #     aws-region: ${{ secrets.AWS_REGION }}
+      # - name: Update kubeconfig
+      #   run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }}
+      # - uses: azure/setup-helm@v4
+      #   with:
+      #     version: v3.14.4
+      # - name: Helm upgrade
+      #   run: |
+      #     helm upgrade --install touchstone \
+      #       "oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts/touchstone" \
+      #       --version "${{ needs.version.outputs.version }}" \
+      #       --namespace touchstone --create-namespace \
+      #       -f deploy/helm/touchstone/values-production.yaml \
+      #       --set image.registry=${{ env.REGISTRY }}/${{ github.repository_owner }} \
+      #       --set image.tag=${{ needs.version.outputs.version }} \
+      #       --wait --timeout 10m --atomic
+      # - name: Verify rollout
+      #   run: |
+      #     kubectl -n touchstone rollout status deploy/touchstone-control-plane --timeout=5m

@@ -1,0 +1,40 @@
+name: rollback
+
+# DESIGN — not yet provisioned.
+#
+# A manually-triggered rollback skeleton. It is workflow_dispatch-only and gated
+# behind the `production` GitHub Environment (configure required reviewers), so a
+# human must approve before it runs. It performs NO AWS or Kubernetes actions:
+# the real `helm rollback` is a placeholder that documents exactly what the
+# operator script (scripts/rollback.sh) would run once a cluster exists.
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Helm release name"
+        required: false
+        default: "touchstone"
+      revision:
+        description: "Target revision (blank = previous)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: production   # required-reviewer gate
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rollback (placeholder — no cluster contacted)
+        run: |
+          echo "DESIGN placeholder: no live rollback is performed."
+          echo "Release:  ${{ inputs.release }}"
+          echo "Revision: ${{ inputs.revision || 'previous' }}"
+          echo
+          echo "Once EKS + OIDC trust are provisioned, this job will run the"
+          echo "operator rollback helper (which is dry-run by default):"
+          echo "  scripts/rollback.sh --release ${{ inputs.release }} \\"
+          echo "    ${{ inputs.revision && format('--revision {0}', inputs.revision) || '' }} --execute"

@@ -1,5 +1,11 @@
 # Kubernetes manifests
 
+> **DESIGN — not yet provisioned.** These manifests and the Helm chart are
+> validated structurally only (`helm lint` / `helm template` / `kubeconform`,
+> run by the `infra-validation` workflow and `scripts/preflight.sh`). Passing
+> those means they are *well-formed*, **not** deployed. Nothing here has been
+> applied to a live cluster.
+
 Touchstone is deployed with the **Helm chart** in [`../helm/touchstone`](../helm/touchstone),
 which is the source of truth for all per-release workloads — Deployments,
 Services, ConfigMap, Secret/ExternalSecret, HorizontalPodAutoscalers,

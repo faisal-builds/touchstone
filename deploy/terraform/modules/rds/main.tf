@@ -73,13 +73,13 @@ resource "aws_db_instance" "this" {
   vpc_security_group_ids = [aws_security_group.this.id]
   parameter_group_name   = aws_db_parameter_group.this.name
 
-  backup_retention_period   = 14
-  backup_window             = "03:00-04:00"
-  maintenance_window        = "Mon:04:30-Mon:05:30"
-  copy_tags_to_snapshot     = true
-  deletion_protection       = true
-  storage_throughput        = 125
-  iops                      = 3000
+  backup_retention_period               = 14
+  backup_window                         = "03:00-04:00"
+  maintenance_window                    = "Mon:04:30-Mon:05:30"
+  copy_tags_to_snapshot                 = true
+  deletion_protection                   = true
+  storage_throughput                    = 125
+  iops                                  = 3000
   performance_insights_enabled          = true
   performance_insights_retention_period = 7
   auto_minor_version_upgrade            = true

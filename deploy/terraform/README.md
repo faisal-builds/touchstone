@@ -1,5 +1,11 @@
 # Touchstone AWS Infrastructure (Terraform)
 
+> **DESIGN — not yet provisioned.** This module is validated structurally only
+> (`terraform fmt` + `terraform validate` + `tflint`, run by the
+> `infra-validation` workflow and `scripts/preflight.sh`). Passing those means
+> the configuration is *well-formed*, **not** that any AWS resources exist.
+> `terraform apply` has not been run; no live cloud account is connected.
+
 Provisions the production AWS footprint for Touchstone:
 
 | Module | Resources |
