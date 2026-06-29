@@ -13,6 +13,7 @@ returning 403 as an RFC-7807 problem if the principal lacks the permission.
 from __future__ import annotations
 
 import datetime as _dt
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -49,7 +50,7 @@ def get_security() -> SecurityService:
 
 async def get_session(
     db: Annotated[Database, Depends(get_db)],
-):
+) -> AsyncIterator[AsyncSession]:
     async for session in db.session():
         yield session
 
@@ -161,7 +162,7 @@ async def get_principal(
 PrincipalDep = Annotated[Principal, Depends(get_principal)]
 
 
-def require(permission: Permission):
+def require(permission: Permission) -> Callable[..., Awaitable[Principal]]:
     """Dependency factory enforcing a single RBAC permission."""
 
     async def _guard(principal: PrincipalDep) -> Principal:

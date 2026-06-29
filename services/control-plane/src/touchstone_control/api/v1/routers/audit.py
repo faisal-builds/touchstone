@@ -15,6 +15,7 @@ from collections.abc import Mapping
 
 from fastapi import APIRouter, Depends, Request
 
+from ....db.audit_read import AuditReader
 from ....domain.rbac import Permission, Principal
 from ....schemas import AuditRecordOut
 from ...v1.deps import require
@@ -28,5 +29,5 @@ async def list_audit_records(
     principal: Principal = Depends(require(Permission.AUDIT_READ)),
     limit: int = 100,
 ) -> list[Mapping[str, object]]:
-    reader = request.app.state.audit_reader
+    reader: AuditReader = request.app.state.audit_reader
     return await reader.list_for_org(uuid.UUID(principal.org_id), limit=limit)

@@ -11,8 +11,10 @@ This preserves the single-writer invariant after the per-service database split.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import structlog
-from sqlalchemy import update
+from sqlalchemy import CursorResult, update
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from touchstone_events import EventEnvelope, RobustnessEvaluatedPayload, Topic
 
@@ -32,10 +34,13 @@ class RobustnessConsumer:
         if not isinstance(payload, RobustnessEvaluatedPayload):
             return
         async with self._sessionmaker() as session:
-            result = await session.execute(
-                update(Verifier)
-                .where(Verifier.id == payload.verifier_id)
-                .values(robustness_score=payload.robustness_score)
+            result = cast(
+                "CursorResult[Any]",
+                await session.execute(
+                    update(Verifier)
+                    .where(Verifier.id == payload.verifier_id)
+                    .values(robustness_score=payload.robustness_score)
+                ),
             )
             await session.commit()
         if result.rowcount:

@@ -11,6 +11,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
+from sqlalchemy import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from touchstone_control.core.config import get_settings
@@ -25,7 +26,7 @@ target_metadata = Base.metadata
 _settings = get_settings()
 
 
-def _do_run_migrations(connection) -> None:
+def _do_run_migrations(connection: Connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,

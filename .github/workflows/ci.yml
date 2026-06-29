@@ -23,6 +23,9 @@ jobs:
           POSTGRES_USER: touchstone
           POSTGRES_PASSWORD: touchstone
           POSTGRES_DB: touchstone
+          # Tests connect with a passwordless URL (touchstone@host); trust auth
+          # lets those connections in while migrations still use the full DSN.
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U touchstone"
@@ -78,6 +81,9 @@ jobs:
           POSTGRES_USER: touchstone
           POSTGRES_PASSWORD: touchstone
           POSTGRES_DB: touchstone
+          # Tests connect with a passwordless URL (touchstone@host); trust auth
+          # lets those connections in while migrations still use the full DSN.
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U touchstone"
@@ -102,6 +108,10 @@ jobs:
           cd ../control-plane && PYTHONPATH=src alembic upgrade head
       - name: Lint
         run: ruff check src
+      # ubuntu-24.04 restricts unprivileged user namespaces via AppArmor, which
+      # breaks the sandbox's `unshare --map-root-user`. Re-enable them for tests.
+      - name: Enable unprivileged user namespaces (sandbox)
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Test
         run: PYTHONPATH=src pytest tests/ -q
 
@@ -117,6 +127,9 @@ jobs:
           POSTGRES_USER: touchstone
           POSTGRES_PASSWORD: touchstone
           POSTGRES_DB: touchstone
+          # Tests connect with a passwordless URL (touchstone@host); trust auth
+          # lets those connections in while migrations still use the full DSN.
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U touchstone"
@@ -154,6 +167,9 @@ jobs:
           POSTGRES_USER: touchstone
           POSTGRES_PASSWORD: touchstone
           POSTGRES_DB: touchstone
+          # Tests connect with a passwordless URL (touchstone@host); trust auth
+          # lets those connections in while migrations still use the full DSN.
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U touchstone"
@@ -191,6 +207,9 @@ jobs:
           POSTGRES_USER: touchstone
           POSTGRES_PASSWORD: touchstone
           POSTGRES_DB: touchstone
+          # Tests connect with a passwordless URL (touchstone@host); trust auth
+          # lets those connections in while migrations still use the full DSN.
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U touchstone"
@@ -232,11 +251,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ../../libs/touchstone-events
+          pip install -e ../../libs/touchstone-fleet
           pip install -e ../verification-engine
           pip install -e ../risk-engine
           pip install -e ".[dev]"
       - name: Lint
         run: ruff check src tests
+      # ubuntu-24.04 restricts unprivileged user namespaces via AppArmor, which
+      # breaks the sandbox's `unshare --map-root-user`. Re-enable them for tests.
+      - name: Enable unprivileged user namespaces (sandbox)
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Test
         # The IVP has no datastore; tests run the real sandbox in-process.
         run: PYTHONPATH=src pytest tests/ -q

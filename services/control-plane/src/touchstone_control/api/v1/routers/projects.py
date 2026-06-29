@@ -7,6 +7,7 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ....core.errors import ConflictError, NotFoundError
 from ....db.models import Project, Workspace
@@ -17,8 +18,10 @@ from ...v1.deps import SessionDep, require
 router = APIRouter(prefix="/workspaces/{workspace_id}/projects", tags=["projects"])
 
 
-async def _assert_workspace(session, org_id: str, workspace_id: uuid.UUID) -> Workspace:
-    ws = (
+async def _assert_workspace(
+    session: AsyncSession, org_id: str, workspace_id: uuid.UUID
+) -> Workspace:
+    ws: Workspace | None = (
         await session.execute(
             select(Workspace).where(
                 Workspace.id == workspace_id,

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
 
@@ -28,7 +28,7 @@ class _ORMModel(BaseModel):
 
 # --- Pagination ------------------------------------------------------------- #
 class Page(BaseModel):
-    items: list
+    items: list[Any]
     next_cursor: str | None = None
     limit: int
 
@@ -107,7 +107,7 @@ class VerifierCreate(BaseModel):
     name: Name
     slug: Slug
     verifier_type: VerifierType
-    definition: dict = Field(
+    definition: dict[str, Any] = Field(
         default_factory=dict,
         description="Verifier spec interpreted by the verification engine.",
     )
@@ -120,7 +120,7 @@ class VerifierOut(_ORMModel):
     slug: str
     version: int
     verifier_type: VerifierType
-    definition: dict
+    definition: dict[str, Any]
     robustness_score: float | None
     is_active: bool
     created_at: _dt.datetime
@@ -145,7 +145,7 @@ class VerificationOut(_ORMModel):
     uncertainty: float | None
     passed: bool | None
     risk_score: float | None
-    grader_breakdown: dict
+    grader_breakdown: dict[str, Any]
     latency_ms: int | None
     created_at: _dt.datetime
 

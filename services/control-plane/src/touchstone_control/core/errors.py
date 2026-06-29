@@ -25,8 +25,8 @@ class TouchstoneError(Exception):
         self.extra = extra
         super().__init__(self.detail)
 
-    def to_problem(self, instance: str) -> dict:
-        body = {
+    def to_problem(self, instance: str) -> dict[str, object]:
+        body: dict[str, object] = {
             "type": f"{ERROR_BASE}/{self.error_type}",
             "title": self.title,
             "status": self.status_code,

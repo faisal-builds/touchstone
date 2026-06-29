@@ -23,6 +23,7 @@ from __future__ import annotations
 import datetime as _dt
 import enum
 import uuid
+from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
@@ -46,7 +47,7 @@ from ...domain.rbac import Role
 from ..base import Base, TimestampMixin, UUIDPkMixin
 
 
-def _enum_values(enum_cls):
+def _enum_values(enum_cls: type[enum.Enum]) -> list[Any]:
     """Persist native-enum columns by their .value (lowercase), not member name."""
     return [m.value for m in enum_cls]
 
@@ -76,7 +77,7 @@ class Organization(UUIDPkMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     # Loose JSON for plan/limits to avoid schema churn during early iteration.
-    settings: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    settings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     deleted_at: Mapped[_dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
     memberships: Mapped[list[Membership]] = relationship(
@@ -255,7 +256,7 @@ class Verifier(UUIDPkMixin, TimestampMixin, Base):
     verifier_type: Mapped[VerifierType] = mapped_column(
         SAEnum(VerifierType, name="verifier_type", values_callable=_enum_values), nullable=False
     )
-    definition: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    definition: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     # Latest measured robustness against reward hacking (0..1). Null until tested.
     robustness_score: Mapped[float | None] = mapped_column(Float)
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
@@ -303,7 +304,7 @@ class VerificationRun(UUIDPkMixin, TimestampMixin, Base):
     score: Mapped[float | None] = mapped_column(Float)
     uncertainty: Mapped[float | None] = mapped_column(Float)
     passed: Mapped[bool | None] = mapped_column()
-    grader_breakdown: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    grader_breakdown: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     risk_score: Mapped[float | None] = mapped_column(Float)
     latency_ms: Mapped[int | None] = mapped_column(Integer)
     error: Mapped[str | None] = mapped_column(Text)

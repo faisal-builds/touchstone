@@ -10,16 +10,19 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Callable
+from typing import cast
 
 import structlog
 from prometheus_client import Counter, Histogram
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 
 log = structlog.get_logger("access")
 
-def _metric(factory, name):
+
+def _metric[T](factory: Callable[[], T], name: str) -> T:
     """Register a metric, reusing an existing collector if already registered.
 
     Each Touchstone service runs in its own process in production, but two
@@ -30,7 +33,7 @@ def _metric(factory, name):
         return factory()
     except ValueError:
         from prometheus_client import REGISTRY
-        return REGISTRY._names_to_collectors[name]
+        return cast(T, REGISTRY._names_to_collectors[name])
 
 
 REQUEST_COUNT = _metric(
@@ -53,7 +56,7 @@ REQUEST_LATENCY = _metric(
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         request.state.request_id = request_id
         structlog.contextvars.bind_contextvars(request_id=request_id)

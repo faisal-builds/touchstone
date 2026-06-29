@@ -23,6 +23,7 @@ import hmac
 import secrets
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 import jwt
 from argon2 import PasswordHasher
@@ -122,7 +123,7 @@ class SecurityService:
             algorithm=self._settings.jwt_algorithm,
         )
 
-    def decode_token(self, token: str) -> dict:
+    def decode_token(self, token: str) -> dict[str, Any]:
         return jwt.decode(
             token,
             self._settings.jwt_secret.get_secret_value(),

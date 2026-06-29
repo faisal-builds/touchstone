@@ -11,9 +11,10 @@ from __future__ import annotations
 import time
 
 from redis.asyncio import Redis
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp
 
 # Atomic token-bucket refill+consume. Returns {allowed, remaining, reset_after}.
 _LUA = """
@@ -44,7 +45,9 @@ return {allowed, math.floor(tokens), reset_after}
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, redis: Redis, *, rate: int, burst: int, window: int = 60):
+    def __init__(
+        self, app: ASGIApp, redis: Redis, *, rate: int, burst: int, window: int = 60
+    ) -> None:
         super().__init__(app)
         self._redis = redis
         self._rate = rate
@@ -64,7 +67,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client = request.client.host if request.client else "unknown"
         return f"rl:ip:{client}"
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         # Skip health probes — they must never be rate limited.
         if request.url.path in ("/healthz", "/readyz", "/metrics"):
             return await call_next(request)

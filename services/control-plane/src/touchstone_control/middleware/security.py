@@ -9,9 +9,10 @@ endpoint are exempted so they keep working.
 
 from __future__ import annotations
 
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.types import ASGIApp
 
 _DOCS_PREFIXES = ("/docs", "/redoc", "/openapi.json", "/metrics")
 
@@ -29,12 +30,12 @@ _API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-ac
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, *, hsts: bool = True, hsts_max_age: int = 63072000) -> None:
+    def __init__(self, app: ASGIApp, *, hsts: bool = True, hsts_max_age: int = 63072000) -> None:
         super().__init__(app)
         self._hsts = hsts
         self._hsts_value = f"max-age={hsts_max_age}; includeSubDomains; preload"
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         response = await call_next(request)
         for key, value in _STATIC_HEADERS.items():
             response.headers.setdefault(key, value)

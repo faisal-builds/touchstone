@@ -10,17 +10,22 @@ from __future__ import annotations
 
 import logging
 import sys
+from typing import TYPE_CHECKING
 
 import structlog
+from structlog.typing import Processor
 
 from ..core.config import Environment, Settings
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
 
 
 def configure_logging(settings: Settings) -> None:
     level = getattr(logging, settings.log_level.upper(), logging.INFO)
     logging.basicConfig(format="%(message)s", stream=sys.stdout, level=level)
 
-    shared = [
+    shared: list[Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
@@ -40,7 +45,7 @@ def configure_logging(settings: Settings) -> None:
     )
 
 
-def configure_tracing(app, settings: Settings) -> None:
+def configure_tracing(app: FastAPI, settings: Settings) -> None:
     if not settings.otel_exporter_otlp_endpoint:
         return
     from opentelemetry import trace

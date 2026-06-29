@@ -18,12 +18,12 @@ router = APIRouter(tags=["system"])
 
 
 @router.get("/healthz", summary="Liveness probe")
-async def healthz() -> dict:
+async def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
 @router.get("/readyz", summary="Readiness probe")
-async def readyz(session: SessionDep, settings: SettingsDep) -> dict:
+async def readyz(session: SessionDep, settings: SettingsDep) -> dict[str, object]:
     checks: dict[str, str] = {}
     try:
         await session.execute(text("SELECT 1"))

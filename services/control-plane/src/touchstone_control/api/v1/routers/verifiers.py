@@ -13,6 +13,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from touchstone_events import AuditAction
 
 from ....core.errors import NotFoundError
@@ -25,8 +26,10 @@ from ...v1.deps import SessionDep, require
 router = APIRouter(prefix="/projects/{project_id}/verifiers", tags=["verifiers"])
 
 
-async def _assert_project(session, org_id: str, project_id: uuid.UUID) -> Project:
-    project = (
+async def _assert_project(
+    session: AsyncSession, org_id: str, project_id: uuid.UUID
+) -> Project:
+    project: Project | None = (
         await session.execute(
             select(Project).where(
                 Project.id == project_id,

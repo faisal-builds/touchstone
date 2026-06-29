@@ -13,7 +13,9 @@ preflights are cheap.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any, cast
 
 import structlog
 from fastapi import FastAPI
@@ -74,7 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     deps.bind_runtime(database, security)
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.settings = settings
         app.state.db = database
         app.state.audit_reader = audit_reader
@@ -133,7 +135,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     # --- Error handlers ------------------------------------------------------
-    app.add_exception_handler(TouchstoneError, touchstone_error_handler)
+    # Starlette types the handler's exc param as the base Exception; our handler
+    # narrows it to TouchstoneError, which is sound at runtime (it's only invoked
+    # for that type) but not expressible to the type checker — hence the cast.
+    app.add_exception_handler(TouchstoneError, cast("Any", touchstone_error_handler))
     app.add_exception_handler(Exception, unhandled_error_handler)
 
     # --- Routers -------------------------------------------------------------

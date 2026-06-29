@@ -10,6 +10,9 @@ no-op so the API still functions end-to-end.
 
 from __future__ import annotations
 
+from typing import Any
+from uuid import UUID
+
 import structlog
 from aiokafka import AIOKafkaProducer
 from touchstone_events import (
@@ -60,13 +63,13 @@ class EventProducer:
 async def publish_control_plane_action(
     producer: EventProducer,
     *,
-    org_id,
+    org_id: UUID,
     action: AuditAction,
     actor_type: str,
     actor_id: str | None = None,
     resource_type: str | None = None,
     resource_id: str | None = None,
-    metadata: dict | None = None,
+    metadata: dict[str, Any] | None = None,
     trace_id: str | None = None,
 ) -> None:
     """Publish an auditable control-plane action for the audit-engine to record.

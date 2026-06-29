@@ -11,7 +11,14 @@ from __future__ import annotations
 import enum
 from functools import lru_cache
 
-from pydantic import Field, PostgresDsn, RedisDsn, SecretStr, field_validator
+from pydantic import (
+    Field,
+    PostgresDsn,
+    RedisDsn,
+    SecretStr,
+    ValidationInfo,
+    field_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -45,8 +52,10 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
     # --- Datastores ------------------------------------------------------------
+    # pydantic coerces the str default into the DSN type at runtime; mypy can't
+    # see that, hence the targeted ignore on the default assignment.
     database_url: PostgresDsn = Field(
-        default="postgresql+asyncpg://touchstone:touchstone@localhost:5432/touchstone"
+        default="postgresql+asyncpg://touchstone:touchstone@localhost:5432/touchstone"  # type: ignore[assignment]
     )
     database_pool_size: int = 20
     database_max_overflow: int = 10
@@ -54,7 +63,7 @@ class Settings(BaseSettings):
     # split. The control-plane reads them through a read-only cross-database
     # connection; when unset this falls back to `database_url` (dev/shared-DB).
     audit_database_url: PostgresDsn | None = None
-    redis_url: RedisDsn = Field(default="redis://localhost:6379/0")
+    redis_url: RedisDsn = Field(default="redis://localhost:6379/0")  # type: ignore[assignment]
 
     # --- Event backbone --------------------------------------------------------
     redpanda_brokers: str = "localhost:19092"
@@ -83,7 +92,7 @@ class Settings(BaseSettings):
 
     @field_validator("jwt_secret")
     @classmethod
-    def _reject_default_secret_in_prod(cls, v: SecretStr, info):  # noqa: ANN001
+    def _reject_default_secret_in_prod(cls, v: SecretStr, info: ValidationInfo) -> SecretStr:
         return v  # enforced at startup in app.py where env is also known
 
     @property

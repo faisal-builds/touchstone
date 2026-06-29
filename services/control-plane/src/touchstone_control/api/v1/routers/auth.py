@@ -13,12 +13,16 @@ the same generic 401.
 
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from touchstone_events import AuditAction
 
+from ....core.config import Settings
 from ....core.errors import AuthenticationError, ConflictError, ValidationError
+from ....core.security import SecurityService
 from ....db.models import Membership, Organization, User
 from ....domain.rbac import Role
 from ....observability.events import publish_control_plane_action
@@ -28,7 +32,13 @@ from ...v1.deps import SecurityDep, SessionDep, SettingsDep
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _token_pair(security, settings, *, user_id, org: Organization) -> TokenPair:
+def _token_pair(
+    security: SecurityService,
+    settings: Settings,
+    *,
+    user_id: uuid.UUID,
+    org: Organization,
+) -> TokenPair:
     access = security.issue_access_token(user_id=user_id, org_id=org.id)
     return TokenPair(
         access_token=access,
