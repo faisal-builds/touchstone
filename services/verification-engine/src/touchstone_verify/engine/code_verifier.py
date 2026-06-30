@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..sandbox.runner import SandboxLimits, SandboxRunner
+from ..sandbox.runner import SandboxRunner, sanitize_definition_limits
 from .base import (
     VerificationResult,
     Verifier,
@@ -37,9 +37,15 @@ class CodeVerifier(Verifier):
             raise VerifierError("code verifier requires a non-empty 'code' string")
         self._code = code
         self._threshold = float(definition.get("threshold", 1.0))
-        # Allow per-verifier sandbox tuning, else safe defaults.
-        limits = definition.get("limits") or {}
-        self._runner = runner or SandboxRunner(SandboxLimits(**limits))
+        # Per-verifier tuning is customer-authored, so it can only narrow the
+        # sandbox, never weaken it (M3). Validate always — a definition that
+        # tries to disable isolation is rejected even when a shared runner is
+        # injected and the limits would otherwise be ignored.
+        try:
+            limits = sanitize_definition_limits(definition.get("limits"))
+        except ValueError as exc:
+            raise VerifierError(str(exc)) from exc
+        self._runner = runner or SandboxRunner(limits)
 
     async def verify(self, artifact: Any, ctx: VerifierContext) -> VerificationResult:
         outcome = await self._runner.run(self._code, artifact)

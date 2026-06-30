@@ -72,6 +72,54 @@ class SandboxLimits:
     isolate_network: bool = True
 
 
+# A verifier *definition* is customer-authored, so its ``limits`` dict is
+# attacker-controlled and must not be able to weaken isolation (SECURITY_FINDINGS
+# M3). Network isolation and every resource cap are *server-owned*: rejected if a
+# definition tries to set them. Only timeouts are tunable, and only *downward* —
+# clamped to ``[floor, server-default]`` so a definition can tighten but never
+# raise above the server maximum.
+_TUNABLE_LIMIT_FLOORS: dict[str, float] = {"cpu_seconds": 1, "wall_timeout_s": 0.1}
+_SERVER_OWNED_LIMITS = frozenset(
+    {"isolate_network", "memory_mb", "max_processes", "max_open_files", "max_file_size_mb"}
+)
+
+
+def sanitize_definition_limits(
+    raw: object, *, base: SandboxLimits | None = None
+) -> SandboxLimits:
+    """Clamp a customer-authored ``limits`` dict into safe :class:`SandboxLimits`.
+
+    The thing being sandboxed must not pick its own sandbox strength. Network
+    isolation and all resource caps are server-owned and rejected if present;
+    only ``cpu_seconds`` / ``wall_timeout_s`` may be tuned, clamped so they can
+    tighten but never exceed the server default. Unknown or non-numeric keys
+    raise ``ValueError`` — never the silent ``TypeError`` that a bare
+    ``SandboxLimits(**raw)`` would raise on an unexpected key. ``None``/empty
+    yields ``base`` unchanged.
+    """
+    base = base or SandboxLimits()
+    if raw is None:
+        return base
+    if not isinstance(raw, dict):
+        raise ValueError(f"limits must be an object, got {type(raw).__name__}")
+
+    overrides: dict[str, int | float] = {}
+    for key, value in raw.items():
+        if key in _SERVER_OWNED_LIMITS:
+            raise ValueError(
+                f"limit {key!r} is server-owned and cannot be set per verifier"
+            )
+        if key not in _TUNABLE_LIMIT_FLOORS:
+            raise ValueError(f"unknown limit key: {key!r}")
+        # bool is an int subclass; reject it so True/False can't pose as a number.
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"limit {key!r} must be a number")
+        clamped = min(max(value, _TUNABLE_LIMIT_FLOORS[key]), getattr(base, key))
+        overrides[key] = int(clamped) if key == "cpu_seconds" else float(clamped)
+
+    return dataclasses.replace(base, **overrides)
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class SandboxResult:
     ok: bool
