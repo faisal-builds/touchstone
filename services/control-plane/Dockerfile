@@ -42,6 +42,12 @@ ENV PYTHONPATH=/app/src
 USER touchstone
 EXPOSE 8000
 
+# Liveness probe (the slim image has no curl/wget; use the interpreter). Mirrors
+# the k8s liveness probe so `docker run`/compose see the same health signal.
+# start-period covers alembic migrations before gunicorn binds.
+HEALTHCHECK --interval=15s --timeout=3s --start-period=60s --retries=5 \
+  CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2).status==200 else 1)"]
+
 # gunicorn manages uvicorn workers. Worker count is overridden per-pod via env.
 # Graceful timeout gives in-flight verifications time to finish on rollout.
 CMD ["gunicorn", "touchstone_control.main:app", \

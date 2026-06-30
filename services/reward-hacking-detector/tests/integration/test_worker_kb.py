@@ -23,11 +23,19 @@ from touchstone_events import (
 from touchstone_events import (
     new_envelope as _new_envelope,
 )
+from touchstone_verify.sandbox.runner import sandbox_supported
 
 from touchstone_rhd.domain.models import AttackCase
 from touchstone_rhd.knowledge.repository import KnowledgeBase, create_schema
 from touchstone_rhd.orchestrator import EvaluationConfig, Orchestrator
 from touchstone_rhd.worker import AutoEvaluateWorker, EvaluationJobRunner
+
+# Attacks execute verifier code in the real POSIX sandbox; skip — never fail —
+# where fork/rlimits are unavailable (Windows). Runs for real in CI on Linux.
+pytestmark = pytest.mark.skipif(
+    not sandbox_supported(),
+    reason="POSIX process sandbox (fork/rlimits/unshare) unavailable on this platform",
+)
 
 DB_URL = "postgresql+asyncpg://touchstone@127.0.0.1:5432/touchstone"
 

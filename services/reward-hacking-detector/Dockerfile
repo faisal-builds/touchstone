@@ -40,6 +40,11 @@ ENV PYTHONPATH=/app/src:/app/verification-engine-src
 USER touchstone
 EXPOSE 8030
 
+# Liveness probe (slim image: no curl/wget). The worker variant overrides the
+# command and has no HTTP port, so its compose service omits this check.
+HEALTHCHECK --interval=15s --timeout=3s --start-period=30s --retries=5 \
+  CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8030/healthz', timeout=2).status==200 else 1)"]
+
 # Default: the HTTP API. The worker service overrides this with
 # `python -m touchstone_rhd.worker_main`.
 CMD ["python", "-m", "touchstone_rhd.main"]

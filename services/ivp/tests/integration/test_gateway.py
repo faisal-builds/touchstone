@@ -10,11 +10,19 @@ import uuid
 
 import httpx
 import pytest
+from touchstone_verify.sandbox.runner import sandbox_supported
 
 from touchstone_ivp.auth import Principal
 from touchstone_ivp.config import Environment, Settings
 from touchstone_ivp.events import NullPublisher
 from touchstone_ivp.main import create_app
+
+# The gateway hot path runs the real POSIX sandbox; skip — never fail — where
+# fork/rlimits are unavailable (Windows). Exercised for real in CI on Linux.
+pytestmark = pytest.mark.skipif(
+    not sandbox_supported(),
+    reason="POSIX process sandbox (fork/rlimits/unshare) unavailable on this platform",
+)
 
 ORG = uuid.uuid4()
 SAFE_CODE = "def check(artifact):\n    return {'score': 0.0 if 'dangerous' in artifact else 1.0}"

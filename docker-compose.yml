@@ -68,6 +68,14 @@ services:
     # would silently be dropped. --worker-tmp-dir /tmp avoids a Permission denied
     # crash writing gunicorn's heartbeat file under /home/touchstone.
     command: sh -c "alembic -c /app/alembic.ini upgrade head && gunicorn touchstone_control.main:app --worker-class uvicorn.workers.UvicornWorker --workers 4 --bind 0.0.0.0:8000 --worker-tmp-dir /tmp --access-logfile -"
+    # The slim image has no curl/wget; probe with the interpreter. start_period
+    # covers alembic migrations running before gunicorn binds.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2).status==200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
 
   verification-engine:
     build:
@@ -76,7 +84,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       redpanda: {condition: service_started}
-      control-plane: {condition: service_started}
+      control-plane: {condition: service_healthy}
     environment:
       TOUCHSTONE_VERIFY_ENVIRONMENT: local
       TOUCHSTONE_VERIFY_DATABASE_URL: postgresql+asyncpg://touchstone:touchstone@postgres:5432/touchstone
@@ -94,7 +102,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       redpanda: {condition: service_started}
-      control-plane: {condition: service_started}
+      control-plane: {condition: service_healthy}
     environment:
       TOUCHSTONE_RISK_ENVIRONMENT: local
       TOUCHSTONE_RISK_DATABASE_URL: postgresql+asyncpg://touchstone:touchstone@postgres:5432/touchstone
@@ -107,7 +115,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       redpanda: {condition: service_started}
-      control-plane: {condition: service_started}
+      control-plane: {condition: service_healthy}
     environment:
       TOUCHSTONE_AUDIT_ENVIRONMENT: local
       TOUCHSTONE_AUDIT_DATABASE_URL: postgresql+asyncpg://touchstone:touchstone@postgres:5432/touchstone
@@ -120,7 +128,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       redpanda: {condition: service_started}
-      control-plane: {condition: service_started}
+      control-plane: {condition: service_healthy}
     environment:
       TOUCHSTONE_RHD_ENVIRONMENT: local
       TOUCHSTONE_RHD_DATABASE_URL: postgresql+asyncpg://touchstone:touchstone@postgres:5432/touchstone
@@ -131,6 +139,12 @@ services:
       - "8030:8030"
     # Code verifiers execute in the engine sandbox, which uses unshare.
     cap_add: ["SYS_ADMIN"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8030/healthz', timeout=2).status==200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
 
   reward-hacking-detector-worker:
     build:
@@ -140,7 +154,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       redpanda: {condition: service_started}
-      reward-hacking-detector: {condition: service_started}
+      reward-hacking-detector: {condition: service_healthy}
     environment:
       TOUCHSTONE_RHD_ENVIRONMENT: local
       TOUCHSTONE_RHD_DATABASE_URL: postgresql+asyncpg://touchstone:touchstone@postgres:5432/touchstone
@@ -148,21 +162,61 @@ services:
       TOUCHSTONE_RHD_JWT_SECRET: local-dev-secret-change-me-in-prod-please
       TOUCHSTONE_RHD_AUTO_EVALUATE_ON_REGISTER: "true"
     cap_add: ["SYS_ADMIN"]
+    # This reuses the RHD image (which has an HTTP HEALTHCHECK) but runs the
+    # headless worker with no HTTP port, so the inherited probe would always
+    # fail. Disable it — the worker's liveness is the process + restart policy.
+    healthcheck:
+      disable: true
+
+  # Inline Verification Plane — the inline/critical-path gateway (ADR-015). The
+  # dashboard's BFF proxies to it (IVP_URL). Stateless: reads no DB, validates
+  # API keys via the control-plane and shares its JWT secret.
+  ivp:
+    build:
+      context: .
+      dockerfile: services/ivp/Dockerfile
+    depends_on:
+      redpanda: {condition: service_started}
+      control-plane: {condition: service_healthy}
+    environment:
+      TOUCHSTONE_IVP_ENVIRONMENT: local
+      TOUCHSTONE_IVP_CONTROL_PLANE_URL: http://control-plane:8000
+      TOUCHSTONE_IVP_REDPANDA_BROKERS: redpanda:19092
+      # Must match the control-plane so user JWTs + minted service tokens verify.
+      TOUCHSTONE_IVP_JWT_SECRET: local-dev-secret-change-me-in-prod-please
+    ports:
+      - "8050:8050"
+    # The fast tier executes code verifiers in the engine sandbox (unshare).
+    cap_add: ["SYS_ADMIN"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8050/healthz', timeout=2).status==200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
 
   web:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
     depends_on:
-      control-plane: {condition: service_started}
-      reward-hacking-detector: {condition: service_started}
+      control-plane: {condition: service_healthy}
+      reward-hacking-detector: {condition: service_healthy}
+      ivp: {condition: service_healthy}
     environment:
       # The dashboard's BFF proxies to these (server-side only).
       CONTROL_PLANE_URL: http://control-plane:8000
       RHD_URL: http://reward-hacking-detector:8030
+      IVP_URL: http://ivp:8050
       NODE_ENV: production
     ports:
       - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
 
 volumes:
   pgdata:

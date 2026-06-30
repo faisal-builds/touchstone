@@ -45,5 +45,9 @@ ENV PYTHONPATH=/app/src:/app/verification-engine-src:/app/risk-engine-src
 USER touchstone
 EXPOSE 8050
 
+# Liveness probe (slim image: no curl/wget; use the interpreter).
+HEALTHCHECK --interval=15s --timeout=3s --start-period=30s --retries=5 \
+  CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8050/healthz', timeout=2).status==200 else 1)"]
+
 # The inline gateway. create_app is exposed as a uvicorn factory.
 CMD ["uvicorn", "touchstone_ivp.main:app", "--factory", "--host", "0.0.0.0", "--port", "8050"]

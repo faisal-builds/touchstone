@@ -23,3 +23,15 @@ pgdata/
 # Node (web app)
 node_modules/
 .next/
+# Terraform (local provider cache + state; infra is validated, never provisioned here)
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+# Test/coverage artifacts (produced by CI; not committed)
+reports/
+coverage.xml
+junit.xml
+# Helm render output (produced by infra-validation / deploy-dryrun in the workspace)
+rendered.yaml

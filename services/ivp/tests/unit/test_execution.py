@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import uuid
 
-from touchstone_verify.sandbox.runner import SandboxLimits, SandboxRunner
+import pytest
+from touchstone_verify.sandbox.runner import SandboxLimits, SandboxRunner, sandbox_supported
 
 from touchstone_ivp.execution import ResultCache, TieredExecutor
 from touchstone_ivp.resilience import LatencyBudget
@@ -14,6 +15,11 @@ CODE = "def check(artifact):\n    return {'score': 1.0 if 'safe' in artifact els
 
 
 def _runner() -> SandboxRunner:
+    # The fast path executes verifier code in a real POSIX sandbox; tests that
+    # build a runner skip where fork/rlimits are unavailable (Windows). Pure
+    # cache/escalation tests that don't call this keep running.
+    if not sandbox_supported():
+        pytest.skip("POSIX process sandbox (fork/rlimits/unshare) unavailable on this platform")
     # Generous wall clock for subprocess startup under test; tight in production.
     return SandboxRunner(SandboxLimits(cpu_seconds=2, memory_mb=128, wall_timeout_s=5.0))
 

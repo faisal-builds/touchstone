@@ -24,25 +24,31 @@ jobs:
       - name: helm lint
         run: helm lint deploy/helm/touchstone -f deploy/helm/touchstone/values-production.yaml
       - name: helm template
+        # Render into the workspace, not /tmp: the kubeconform step below runs as
+        # a Docker action that only mounts $GITHUB_WORKSPACE (/github/workspace),
+        # so a /tmp path on the runner is invisible inside that container.
         run: |
           helm template touchstone deploy/helm/touchstone \
-            -n touchstone -f deploy/helm/touchstone/values-production.yaml > /tmp/rendered.yaml
-          test -s /tmp/rendered.yaml
+            -n touchstone -f deploy/helm/touchstone/values-production.yaml > rendered.yaml
+          test -s rendered.yaml
       - name: Validate rendered manifests (kubeconform)
-        uses: docker://ghcr.io/yannh/kubeconform:latest
+        uses: docker://ghcr.io/yannh/kubeconform:v0.8.0
         with:
+          # NOTE: do not single-quote the schema-location URL. The action passes
+          # `args` as one string and word-splits it, so the quotes would be taken
+          # literally into the URL (parse error on the CRD catalog template).
           args: >-
             -strict -ignore-missing-schemas
             -schema-location default
-            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
-            /tmp/rendered.yaml
+            -schema-location https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
+            rendered.yaml
 
   k8s-manifests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Validate raw manifests (kubeconform)
-        uses: docker://ghcr.io/yannh/kubeconform:latest
+        uses: docker://ghcr.io/yannh/kubeconform:v0.8.0
         with:
           args: "-strict -ignore-missing-schemas -summary deploy/k8s/"
 
@@ -64,6 +70,10 @@ jobs:
         run: terraform validate
       - name: tflint
         uses: terraform-linters/setup-tflint@v4
+        with:
+          # Pin the linter so an upstream tflint release can't change the rules
+          # under us and break CI without a code change. Verified at this version.
+          tflint_version: v0.63.1
       - run: tflint --recursive
 
   policy-scan:

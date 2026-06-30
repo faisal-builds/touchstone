@@ -28,14 +28,37 @@ import asyncio
 import dataclasses
 import json
 import os
-import resource
 import shutil
 import signal
 import sys
 import tempfile
 from pathlib import Path
 
+# ``resource`` is POSIX-only. The sandbox's rlimits/unshare isolation only runs
+# on Linux (and is exercised there in CI); importing it must not break on
+# Windows/other platforms, where the sandbox tests skip. Guard the import so the
+# module — and everything that transitively imports it (rhd, ivp) — stays
+# importable everywhere.
+try:
+    import resource
+except ModuleNotFoundError:  # pragma: no cover - non-POSIX (e.g. Windows)
+    resource = None  # type: ignore[assignment]
+
+_POSIX = os.name == "posix" and resource is not None
+
 _HARNESS = str(Path(__file__).with_name("_harness.py"))
+
+
+def sandbox_supported() -> bool:
+    """Whether this host can actually run the process sandbox.
+
+    The sandbox relies on POSIX ``fork``/``preexec_fn`` and ``resource`` rlimits
+    (and, when available, ``unshare`` for network isolation). Those exist on
+    Linux (where CI exercises them) but not on Windows. Tests that execute real
+    sandboxed subprocesses gate on this so they *skip* — rather than error — on
+    platforms that cannot run them.
+    """
+    return _POSIX and hasattr(os, "fork")
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -101,6 +124,9 @@ class SandboxRunner:
             with open(job_path, "w", encoding="utf-8") as fh:
                 json.dump({"code": code, "artifact": artifact}, fh)
 
+            # preexec_fn/start_new_session are POSIX-only. On Linux (the only
+            # platform the sandbox actually runs on) both are applied exactly as
+            # before; elsewhere they are omitted so the call does not raise.
             proc = await asyncio.create_subprocess_exec(
                 *self._command(job_path),
                 stdin=asyncio.subprocess.DEVNULL,
@@ -108,8 +134,8 @@ class SandboxRunner:
                 stderr=asyncio.subprocess.PIPE,
                 cwd=workdir,
                 env={"PATH": "/usr/bin:/bin"},  # minimal; no host secrets
-                preexec_fn=_build_preexec(self._limits),  # noqa: PLW1509
-                start_new_session=True,
+                preexec_fn=_build_preexec(self._limits) if _POSIX else None,  # noqa: PLW1509
+                start_new_session=_POSIX,
             )
             try:
                 stdout, stderr = await asyncio.wait_for(

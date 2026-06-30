@@ -1,0 +1,61 @@
+name: deploy-dryrun
+
+# DESIGN — not yet provisioned.
+#
+# A manually-triggered DRY RUN of the deploy pipeline. It runs the OFFLINE
+# validators for real (helm lint + helm template render) and then STOPS at a
+# placeholder where the live, cluster-side diff/upgrade will later go. It
+# performs NO AWS or Kubernetes actions and needs no cloud account.
+#
+# It is workflow_dispatch-only and gated behind the `production` GitHub
+# Environment (configure required reviewers on that environment), so it cannot
+# run unattended.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version that would be deployed (e.g. 1.0.0)"
+        required: true
+      values:
+        description: "Helm values file"
+        required: false
+        default: "deploy/helm/touchstone/values-production.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    environment: production   # required-reviewer gate; no secrets are used here
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+
+      - name: helm lint (offline)
+        run: helm lint deploy/helm/touchstone -f "${{ inputs.values }}"
+
+      - name: helm template render (offline)
+        run: |
+          helm template touchstone deploy/helm/touchstone \
+            -n touchstone -f "${{ inputs.values }}" \
+            --set image.tag="${{ inputs.version }}" > rendered.yaml
+          echo "Rendered $(grep -c '^kind:' rendered.yaml) manifests for version ${{ inputs.version }}."
+
+      - name: Upload rendered manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-manifests-${{ inputs.version }}
+          path: rendered.yaml
+          if-no-files-found: ignore
+
+      - name: Live diff (placeholder — no cluster contacted)
+        run: |
+          echo "DESIGN placeholder: the offline render above succeeded."
+          echo "A live dry-run against the cluster is NOT performed here."
+          echo "Once EKS + OIDC trust are provisioned, this step will run:"
+          echo "  aws eks update-kubeconfig --name <cluster>"
+          echo "  helm diff upgrade touchstone oci://.../charts/touchstone --version ${{ inputs.version }}"
+          echo "  # or: helm upgrade --install --dry-run=server ... (no changes applied)"

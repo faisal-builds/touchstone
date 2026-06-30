@@ -17,7 +17,6 @@ module "eks" {
   source             = "./modules/eks"
   name               = local.name
   cluster_version    = var.cluster_version
-  vpc_id             = module.vpc.vpc_id
   private_subnet_ids = module.vpc.private_subnet_ids
   tags               = local.tags
 }
@@ -29,25 +28,25 @@ module "s3" {
 }
 
 module "iam" {
-  source                = "./modules/iam"
-  name                  = local.name
-  oidc_provider_arn     = module.eks.oidc_provider_arn
-  oidc_provider_url     = module.eks.oidc_provider_url
-  artifact_bucket_arn   = module.s3.artifact_bucket_arn
-  secrets_manager_arn   = aws_secretsmanager_secret.app.arn
-  tags                  = local.tags
+  source              = "./modules/iam"
+  name                = local.name
+  oidc_provider_arn   = module.eks.oidc_provider_arn
+  oidc_provider_url   = module.eks.oidc_provider_url
+  artifact_bucket_arn = module.s3.artifact_bucket_arn
+  secrets_manager_arn = aws_secretsmanager_secret.app.arn
+  tags                = local.tags
 }
 
 module "rds" {
-  source                = "./modules/rds"
-  name                  = local.name
-  engine_version        = var.postgres_version
-  instance_class        = var.postgres_instance_class
-  allocated_storage     = var.postgres_allocated_storage
-  vpc_id                = module.vpc.vpc_id
-  database_subnet_ids   = module.vpc.database_subnet_ids
-  allowed_cidr_blocks   = module.vpc.private_subnet_cidrs
-  tags                  = local.tags
+  source              = "./modules/rds"
+  name                = local.name
+  engine_version      = var.postgres_version
+  instance_class      = var.postgres_instance_class
+  allocated_storage   = var.postgres_allocated_storage
+  vpc_id              = module.vpc.vpc_id
+  database_subnet_ids = module.vpc.database_subnet_ids
+  allowed_cidr_blocks = module.vpc.private_subnet_cidrs
+  tags                = local.tags
 }
 
 module "elasticache" {
