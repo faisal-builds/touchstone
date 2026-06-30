@@ -78,10 +78,18 @@ class Settings(BaseSettings):
     fast_cpu_seconds: int = 1
     fast_memory_mb: int = 128
     fast_wall_timeout_s: float = 0.5
-    # Whether to silently fall back to the subprocess sandbox if the hardened
-    # backend is unavailable. False in production (never weaken isolation).
+    # Isolation backend for the inline tier. ``gvisor`` / ``firecracker`` are the
+    # hardened production boundaries; ``subprocess`` is the INSECURE local-dev
+    # baseline (no filesystem isolation) and is refused unless the explicit
+    # TOUCHSTONE_ALLOW_INSECURE_SANDBOX opt-in is set. Default stays ``subprocess``
+    # so a fresh deploy must make a conscious choice (hardened backend or opt-in)
+    # rather than silently running untrusted code unisolated.
     sandbox_backend: str = "subprocess"
-    sandbox_allow_fallback: bool = True
+    sandbox_image: str = "touchstone/sandbox:latest"
+    # Fail CLOSED: if the selected hardened backend's runtime is unavailable, refuse
+    # to run rather than silently degrading to the insecure subprocess baseline.
+    # (A degrade is only ever honored alongside the explicit insecure opt-in.)
+    sandbox_allow_fallback: bool = False
 
     # Warm sandbox pool: keep pre-started single-use workers so the hot path skips
     # process spawn + interpreter startup. Off by default (parity with the plain
