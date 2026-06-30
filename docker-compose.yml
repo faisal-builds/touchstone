@@ -184,6 +184,10 @@ services:
       TOUCHSTONE_IVP_REDPANDA_BROKERS: redpanda:19092
       # Must match the control-plane so user JWTs + minted service tokens verify.
       TOUCHSTONE_IVP_JWT_SECRET: local-dev-secret-change-me-in-prod-please
+      # LOCAL DEV ONLY. The plane fails closed on the insecure subprocess sandbox;
+      # this compose stack runs it (no gVisor/Firecracker here), so opt in
+      # explicitly. Production selects a hardened backend and never sets this.
+      TOUCHSTONE_ALLOW_INSECURE_SANDBOX: "1"
     ports:
       - "8050:8050"
     # The fast tier executes code verifiers in the engine sandbox (unshare).
