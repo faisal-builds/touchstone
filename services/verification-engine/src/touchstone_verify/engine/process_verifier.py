@@ -23,7 +23,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from ..sandbox.runner import SandboxLimits, SandboxRunner
+from ..sandbox.runner import SandboxRunner, sanitize_definition_limits
 from .base import (
     VerificationResult,
     Verifier,
@@ -50,8 +50,13 @@ class ProcessVerifier(Verifier):
         if self._agg not in _AGG:
             raise VerifierError(f"unknown aggregation: {self._agg}")
         self._threshold = float(definition.get("threshold", 0.8))
-        limits = definition.get("limits") or {}
-        self._runner = runner or SandboxRunner(SandboxLimits(**limits))
+        # See CodeVerifier: customer-authored limits can only narrow the sandbox,
+        # and are validated even when a shared runner is injected (M3).
+        try:
+            limits = sanitize_definition_limits(definition.get("limits"))
+        except ValueError as exc:
+            raise VerifierError(str(exc)) from exc
+        self._runner = runner or SandboxRunner(limits)
         # Wrap the per-step grader so the sandbox harness sees a check(artifact)
         # where artifact == {"step": <step>, "index": <i>}.
         self._wrapped = (

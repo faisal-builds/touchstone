@@ -32,7 +32,12 @@ import structlog
 # The result/limit dataclasses live with the baseline backend; re-export them here
 # so callers can depend on the abstraction module alone.
 from .pool import PoolExhausted, PoolStats, WarmSandboxPool
-from .runner import SandboxLimits, SandboxResult, SandboxRunner
+from .runner import (
+    SandboxLimits,
+    SandboxResult,
+    SandboxRunner,
+    sanitize_definition_limits,
+)
 
 __all__ = [
     "IsolationBackend",
@@ -45,6 +50,7 @@ __all__ = [
     "PoolExhausted",
     "PoolStats",
     "build_sandbox",
+    "sanitize_definition_limits",
 ]
 
 _log = structlog.get_logger(__name__)
